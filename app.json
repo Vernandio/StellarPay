@@ -1,0 +1,63 @@
+{
+  "expo": {
+    "name": "StellarPay",
+    "slug": "stellarpay",
+    "scheme": "stellarpay",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSCameraUsageDescription": "StellarPay uses your camera to scan QR codes for payments.",
+        "NSFaceIDUsageDescription": "StellarPay uses Face ID to protect your wallet."
+      }
+    },
+    "android": {
+      "permissions": [
+        "CAMERA",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0F0E23",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      }
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0F0E23"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "StellarPay uses your camera to scan QR payment codes."
+        }
+      ],
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "StellarPay uses Face ID to protect your wallet."
+        }
+      ],
+      "expo-barcode-scanner",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
