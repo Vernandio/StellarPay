@@ -3,11 +3,12 @@ import { useAuthStore } from "../store/authStore";
 import { useWalletStore } from "../store/walletStore";
 import { sendPayment, sendPathPayment, findPaymentPaths } from "../services/stellar/payments";
 import { createWallet, setupUSDCTrustline } from "../services/stellar/wallet";
+import { updateUserProfile, createWalletCache } from "../services/firebase/firestore";
 
 export const useStellar = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { user } = useAuthStore();
+  const { user, profile, setProfile } = useAuthStore();
   const { publicKey } = useWalletStore();
 
   const initializeWallet = useCallback(async () => {
@@ -16,6 +17,18 @@ export const useStellar = () => {
     setError(null);
     try {
       const newPublicKey = await createWallet(user.uid);
+      
+      // Update Firestore user profile with new public key
+      await updateUserProfile(user.uid, { stellarPublicKey: newPublicKey });
+      
+      // Initialize Firestore wallet balance cache
+      await createWalletCache(user.uid, newPublicKey);
+      
+      // Update local authStore state to trigger reactive UI updates
+      if (profile) {
+        setProfile({ ...profile, stellarPublicKey: newPublicKey });
+      }
+      
       return newPublicKey;
     } catch (err: any) {
       setError(err.message || "Failed to create wallet");
@@ -23,7 +36,7 @@ export const useStellar = () => {
     } finally {
       setIsProcessing(false);
     }
-  }, [user]);
+  }, [user, profile, setProfile]);
 
   const send = useCallback(async (
     destinationAddress: string,

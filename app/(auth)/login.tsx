@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, Text, KeyboardAvoidingView, Platform, Pressable } from "react-native";
+import { View, Text, KeyboardAvoidingView, Platform, Pressable, TextInput } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -53,44 +53,52 @@ export default function LoginScreen() {
 
           {/* Email Input */}
           <View style={{ marginBottom: Spacing.md }}>
-            <View style={{
-              backgroundColor: "#13122A",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.08)",
-              borderRadius: 12,
-              height: 56,
-              justifyContent: "center",
-              paddingHorizontal: Spacing.md,
-            }}>
-              <Pressable>
-                <Text
-                  style={[Typography.bodyLarge, { color: email ? Colors.textPrimary : Colors.textMuted }]}
-                >
-                  {email || "Email address"}
-                </Text>
-              </Pressable>
-            </View>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email address"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                Typography.bodyLarge,
+                {
+                  backgroundColor: "#13122A",
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  height: 56,
+                  paddingHorizontal: Spacing.md,
+                  color: Colors.textPrimary,
+                },
+              ]}
+            />
           </View>
 
           {/* Password Input */}
           <View style={{ marginBottom: Spacing.lg }}>
-            <View style={{
-              backgroundColor: "#13122A",
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.08)",
-              borderRadius: 12,
-              height: 56,
-              justifyContent: "center",
-              paddingHorizontal: Spacing.md,
-            }}>
-              <Pressable>
-                <Text
-                  style={[Typography.bodyLarge, { color: password ? Colors.textPrimary : Colors.textMuted }]}
-                >
-                  {password ? "••••••••" : "Password"}
-                </Text>
-              </Pressable>
-            </View>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              placeholderTextColor={Colors.textMuted}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[
+                Typography.bodyLarge,
+                {
+                  backgroundColor: "#13122A",
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.08)",
+                  borderRadius: 12,
+                  height: 56,
+                  paddingHorizontal: Spacing.md,
+                  color: Colors.textPrimary,
+                },
+              ]}
+            />
           </View>
 
           {/* Error */}

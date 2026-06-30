@@ -4,8 +4,8 @@ import {
   signOut as firebaseSignOut,
   onAuthStateChanged,
   User,
-} from "firebase/auth";
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
+} from "@firebase/auth";
+import { doc, setDoc, getDoc, serverTimestamp } from "@firebase/firestore";
 import { auth, db } from "./config";
 
 export const signUp = async (email: string, password: string, username: string) => {

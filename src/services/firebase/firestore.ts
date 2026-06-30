@@ -2,7 +2,7 @@ import {
   doc, getDoc, setDoc, updateDoc, collection,
   query, where, getDocs, orderBy, limit,
   onSnapshot, serverTimestamp, Timestamp,
-} from "firebase/firestore";
+} from "@firebase/firestore";
 import { db } from "./config";
 
 // ── Firestore schema types ────────────────────────────────────────────
@@ -57,6 +57,18 @@ export const getWallet = async (uid: string): Promise<WalletData | null> => {
 
 export const updateWalletCache = (uid: string, data: Partial<WalletData>) =>
   updateDoc(doc(db, "wallets", uid), { ...data, lastSyncedAt: serverTimestamp() });
+
+export const updateUserProfile = (uid: string, data: Partial<UserProfile>) =>
+  updateDoc(doc(db, "users", uid), data);
+
+export const createWalletCache = (uid: string, publicKey: string) =>
+  setDoc(doc(db, "wallets", uid), {
+    uid,
+    stellarPublicKey: publicKey,
+    xlmBalance: "10000.0000000",
+    usdcBalance: "0.00",
+    lastSyncedAt: serverTimestamp(),
+  });
 
 export const subscribeToTransactions = (
   uid: string,

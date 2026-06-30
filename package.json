@@ -1,7 +1,7 @@
 {
   "name": "stellarpay",
   "version": "1.0.0",
-  "main": "expo-router/entry",
+  "main": "index.js",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
     "@gorhom/bottom-sheet": "^5.2.14",
@@ -9,6 +9,7 @@
     "@shopify/flash-list": "2.0.2",
     "@stellar/stellar-sdk": "^16.0.1",
     "@stellar/typescript-wallet-sdk": "^3.0.1",
+    "buffer": "^6.0.3",
     "date-fns": "^4.4.0",
     "expo": "~54.0.0",
     "expo-barcode-scanner": "^13.0.1",
@@ -29,6 +30,7 @@
     "react": "19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
+    "react-native-get-random-values": "~1.11.0",
     "react-native-qrcode-svg": "^6.3.21",
     "react-native-reanimated": "~4.1.1",
     "react-native-safe-area-context": "~5.6.0",
