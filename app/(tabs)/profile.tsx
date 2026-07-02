@@ -66,7 +66,7 @@ export default function ProfileScreen() {
           {/* Stellar Account Card */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <View>
-              <Text style={[Typography.labelMedium, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>Stellar Account</Text>
+              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>Stellar Account</Text>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, letterSpacing: 1 }]}>
                 {publicKey ? truncateAddress(publicKey) : "GB...Z3YB"}
               </Text>
@@ -90,11 +90,11 @@ export default function ProfileScreen() {
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }}>
               <View>
                 <Text style={[Typography.labelSmall, { color: "rgba(255,255,255,0.6)", marginBottom: 4 }]}>CARDHOLDER</Text>
-                <Text style={[Typography.labelMedium, { color: Colors.white, fontWeight: "600", textTransform: "uppercase" }]}>{profile?.displayName || "ALEX CHEN"}</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "600", textTransform: "uppercase" }]}>{profile?.displayName || "ALEX CHEN"}</Text>
               </View>
               <View>
                 <Text style={[Typography.labelSmall, { color: "rgba(255,255,255,0.6)", marginBottom: 4 }]}>EXP</Text>
-                <Text style={[Typography.labelMedium, { color: Colors.white, fontWeight: "600" }]}>12/28</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "600" }]}>12/28</Text>
               </View>
               <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" }}>
                 <Text style={{ color: Colors.white, fontWeight: "bold", fontStyle: "italic", fontSize: 16 }}>STELLAR</Text>

@@ -13,7 +13,7 @@ export default function TabsLayout() {
           bottom: 0,
           left: 0,
           right: 0,
-          backgroundColor: "#111111", // Black
+          backgroundColor: "#000000", // Black
           borderTopWidth: 0,
           borderTopLeftRadius: 32,
           borderTopRightRadius: 32,
@@ -56,23 +56,25 @@ export default function TabsLayout() {
           title: "QR",
           tabBarIcon: ({ focused }) => (
             <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 28,
-                backgroundColor: "#FFFFFF",
-                justifyContent: "center",
-                alignItems: "center",
-                top: -20, // Make it pop out over the edge of the navbar
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.15,
-                shadowRadius: 8,
-                elevation: 5,
-              }}
-            >
-              <Feather name="grid" size={26} color="#111111" />
-            </View>
+                style={{
+                  width: 56,
+                  height: 56,
+                  borderRadius: 28,
+                  backgroundColor: "#000000",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  top: -20, // Make it pop out over the edge of the navbar
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.25,
+                  shadowRadius: 8,
+                  elevation: 5,
+                  borderWidth: 2,
+                  borderColor: "#FFFFFF",
+                }}
+              >
+                <Feather name="grid" size={26} color="#FFFFFF" />
+              </View>
           ),
         }}
       />

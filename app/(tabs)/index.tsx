@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -13,6 +13,9 @@ import { useWallet } from "../../src/hooks/useWallet";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
+import { CURRENCIES } from "../../src/constants/currencies";
+import { useState, useRef, useCallback, useMemo } from "react";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 
 const { width } = Dimensions.get("window");
 
@@ -20,6 +23,18 @@ export default function WalletScreen() {
   const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, refreshBalances } = useWallet();
   const { profile } = useAuth();
   const { initializeWallet, isProcessing, error: stellarError } = useStellar();
+  const [currency, setCurrency] = useState(CURRENCIES[0]);
+  const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const currencySheetRef = useRef<BottomSheetModal>(null);
+
+  const handleCurrencySelect = () => {
+    currencySheetRef.current?.present();
+  };
+
+  const renderBackdrop = useCallback(
+    (props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} />,
+    []
+  );
 
   if (false) {
     return (
@@ -103,7 +118,7 @@ export default function WalletScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <LinearGradient
-        colors={[Colors.base, Colors.surface, Colors.baseLight]}
+        colors={["#000000", "#111111", Colors.baseLight]}
         locations={[0, 0.6, 1]}
         style={{ position: "absolute", top: 0, left: 0, right: 0, height: 380 }}
       />
@@ -117,7 +132,7 @@ export default function WalletScreen() {
               <Text style={[Typography.headingMedium, { color: Colors.white, fontWeight: "700" }]}>StellarPay</Text>
             </View>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Pressable style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", marginRight: Spacing.sm }}>
+              <Pressable onPress={() => router.push("/notifications")} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.15)", justifyContent: "center", alignItems: "center", marginRight: Spacing.sm }}>
                 <Feather name="bell" size={20} color={Colors.white} />
                 <View style={{ position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }} />
               </Pressable>
@@ -127,7 +142,7 @@ export default function WalletScreen() {
 
           {/* Greeting */}
           <Animated.View entering={FadeInDown.duration(300).delay(100)} style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.xl, marginBottom: Spacing.xl }}>
-            <Text style={[Typography.bodyMedium, { color: Colors.textSecondary, marginBottom: Spacing.xs }]}>Good morning,</Text>
+            <Text style={[Typography.bodyMedium, { color: Colors.textSecondary, marginBottom: Spacing.xs }]}>Good Morning,</Text>
             <Text style={[Typography.displayMedium, { color: Colors.white }]}>{profile?.displayName || "Alex"} 👋</Text>
           </Animated.View>
 
@@ -136,26 +151,43 @@ export default function WalletScreen() {
             <View style={{ backgroundColor: Colors.surfaceLight, borderRadius: 24, padding: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8, overflow: "hidden" }}>
               <Image source={require("../../assets/images/card_map.png")} style={{ position: "absolute", top: 0, right: -40, width: 250, height: 250, opacity: 0.8 }} resizeMode="contain" />
 
-              <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.sm }}>
-                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, marginRight: Spacing.sm }]}>Total Balance</Text>
-                <Feather name="eye" size={16} color={Colors.textLightSecondary} />
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.sm }}>
+                <Pressable onPress={handleCurrencySelect} style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(0,0,0,0.03)", paddingHorizontal: 12, paddingVertical: 4, borderRadius: 99, alignSelf: "flex-start" }}>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginRight: 4 }]}>{currency.code} Balance</Text>
+                  <Feather name="chevron-down" size={14} color={Colors.textLightSecondary} />
+                </Pressable>
+                <Pressable onPress={() => setIsBalanceHidden(!isBalanceHidden)} style={{ padding: 4, marginRight: Spacing.sm }}>
+                  <Feather name={isBalanceHidden ? "eye-off" : "eye"} size={20} color={Colors.textLightSecondary} />
+                </Pressable>
               </View>
 
-              <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.md }]}>${formatAmount(usdcBalance)}</Text>
+              <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.md }]}>
+                {isBalanceHidden ? "****" : `${currency.symbol}${formatAmount(Number(usdcBalance) * currency.rate)}`}
+              </Text>
 
               <View style={{ alignSelf: "flex-start", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: 99, flexDirection: "row", alignItems: "center", marginBottom: Spacing.xl }}>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: Spacing.xs }]}>≈ {formatAmount(xlmBalance, "XLM", 4)} XLM</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: Spacing.xs }]}>
+                  {isBalanceHidden ? "≈ ****" : `≈ ${formatAmount(xlmBalance, "XLM", 4)} XLM`}
+                </Text>
                 <Feather name="chevron-right" size={14} color={Colors.textLightSecondary} />
               </View>
 
               <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.lg }}>
                 {[
-                  { icon: "plus", label: "Add Money" },
-                  { icon: "send", label: "Send" },
-                  { icon: "refresh-cw", label: "Request" },
-                  { icon: "more-horizontal", label: "More" }
+                  { icon: "plus", label: "Add Money", route: "/add-money" },
+                  { icon: "send", label: "Send", route: "/pay-friends" },
+                  { icon: "download", label: "Request", route: "/request-friends" },
+                  { icon: "external-link", label: "Withdraw", route: "/withdraw" }
                 ].map((action, i) => (
-                  <Pressable key={i} style={{ alignItems: "center" }}>
+                  <Pressable 
+                    key={i} 
+                    style={{ alignItems: "center" }}
+                    onPress={() => {
+                      if (action.route) {
+                        router.push(action.route as any);
+                      }
+                    }}
+                  >
                     <View style={{ width: 48, height: 48, borderRadius: 16, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginBottom: Spacing.xs }}>
                       <Feather name={action.icon as any} size={20} color={Colors.textLightPrimary} />
                     </View>
@@ -169,11 +201,19 @@ export default function WalletScreen() {
           {/* Quick Actions Grid */}
           <Animated.View entering={FadeInDown.duration(300).delay(300)} style={{ paddingHorizontal: Spacing.lg, flexDirection: "row", justifyContent: "space-between", marginBottom: Spacing.xl }}>
             {[
-              { icon: "maximize", label: "Scan QR", sub: "Pay merchant" },
-              { icon: "wifi", label: "Tap to Pay", sub: "Instantly" },
-              { icon: "users", label: "Pay Friends", sub: "By username" }
+              { icon: "maximize", label: "Scan QR", sub: "Pay merchant", route: "/qr" },
+              { icon: "wifi", label: "Tap to Pay", sub: "Instantly", route: "/pay-tap" },
+              { icon: "repeat", label: "Swap", sub: "Exchange assets", route: "/swap" }
             ].map((action, i) => (
-              <Pressable key={i} style={{ flex: 1, alignItems: "center", backgroundColor: Colors.surfaceLight, borderRadius: 16, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xs, marginHorizontal: i > 0 ? Spacing.xs : 0, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+              <Pressable 
+                key={i} 
+                style={{ flex: 1, alignItems: "center", backgroundColor: Colors.surfaceLight, borderRadius: 16, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xs, marginHorizontal: i > 0 ? Spacing.xs : 0, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}
+                onPress={() => {
+                  if (action.route) {
+                    router.push(action.route as any);
+                  }
+                }}
+              >
                 <Feather name={action.icon as any} size={24} color={Colors.textLightPrimary} style={{ marginBottom: Spacing.sm }} />
                 <Text style={[Typography.labelSmall, { color: Colors.textLightPrimary, textAlign: "center", textTransform: "none", fontSize: 12, marginBottom: 2 }]}>{action.label}</Text>
                 <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, fontSize: 10, textAlign: "center" }]}>{action.sub}</Text>
@@ -186,10 +226,10 @@ export default function WalletScreen() {
             <View style={{ backgroundColor: Colors.surfaceLight, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.lg, paddingBottom: Spacing.md }}>
                 <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, fontWeight: "700" }]}>My Balances</Text>
-                <Pressable style={{ flexDirection: "row", alignItems: "center" }}>
+                {/* <Pressable style={{ flexDirection: "row", alignItems: "center" }}>
                   <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginRight: 2 }]}>See all</Text>
                   <Feather name="chevron-right" size={16} color={Colors.textLightSecondary} />
-                </Pressable>
+                </Pressable> */}
               </View>
               <View style={{ minHeight: balances.length * 70 }}>
                 <FlashList
@@ -204,12 +244,17 @@ export default function WalletScreen() {
                         <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.desc}</Text>
                       </View>
                       <View style={{ alignItems: "flex-end", marginRight: Spacing.sm }}>
-                        <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{formatAmount(item.amount)}</Text>
-                        <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>${formatAmount(item.fiat)}</Text>
+                        <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>
+                          {isBalanceHidden ? "****" : formatAmount(item.amount)}
+                        </Text>
+                        <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                          {isBalanceHidden ? "****" : `$${formatAmount(item.fiat)}`}
+                        </Text>
                       </View>
                       <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
                     </Pressable>
                   )}
+                  // @ts-ignore
                   estimatedItemSize={70}
                 />
               </View>
@@ -221,7 +266,7 @@ export default function WalletScreen() {
             <View style={{ backgroundColor: Colors.surfaceLight, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.lg, paddingBottom: Spacing.sm }}>
                 <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Recent Activity</Text>
-                <Pressable style={{ flexDirection: "row", alignItems: "center" }}>
+                <Pressable onPress={() => router.push("/activity")} style={{ flexDirection: "row", alignItems: "center" }}>
                   <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginRight: 2 }]}>See all</Text>
                   <Feather name="chevron-right" size={16} color={Colors.textLightSecondary} />
                 </Pressable>
@@ -251,6 +296,36 @@ export default function WalletScreen() {
 
         </ScrollView>
       </SafeAreaView>
+
+      <BottomSheetModal
+        ref={currencySheetRef}
+        enableDynamicSizing={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+      >
+        <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Select Display Currency</Text>
+          {CURRENCIES.map((c) => (
+            <TouchableOpacity
+              key={c.code}
+              onPress={() => {
+                setCurrency(c);
+                Haptics.selectionAsync();
+                currencySheetRef.current?.dismiss();
+              }}
+              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight }}
+              activeOpacity={0.7}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>{c.symbol}</Text>
+              </View>
+              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, flex: 1 }]}>{c.code}</Text>
+              {currency.code === c.code && <Feather name="check" size={24} color={"#111111"} />}
+            </TouchableOpacity>
+          ))}
+        </BottomSheetView>
+      </BottomSheetModal>
     </View>
   );
 }
