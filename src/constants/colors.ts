@@ -28,6 +28,15 @@ export const Colors = {
   textMuted: "#8E8CAE",
   textDisabled: "rgba(255,255,255,0.2)",
 
+  // Light Theme
+  baseLight: "#F5F6FA",
+  surfaceLight: "#FFFFFF",
+  textLightPrimary: "#111111",
+  textLightSecondary: "#6B7280",
+  textLightMuted: "#9CA3AF",
+  borderLight: "rgba(0,0,0,0.06)",
+  borderLightStrong: "rgba(0,0,0,0.12)",
+
   // Always
   white: "#FFFFFF",
   transparent: "transparent",

@@ -1,6 +1,7 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
+import { View, StyleSheet, Platform } from "react-native";
 
 export default function TabsLayout() {
   return (
@@ -8,48 +9,85 @@ export default function TabsLayout() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: Colors.surface,
-          borderTopColor: Colors.border,
-          borderTopWidth: 0.5,
-          height: 85,
-          paddingBottom: 30,
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          backgroundColor: "#111111", // Black
+          borderTopWidth: 0,
+          borderTopLeftRadius: 32,
+          borderTopRightRadius: 32,
+          height: Platform.OS === 'ios' ? 85 : 65,
+          paddingBottom: Platform.OS === 'ios' ? 25 : 5,
           paddingTop: 8,
         },
-        tabBarActiveTintColor: Colors.primary,
-        tabBarInactiveTintColor: Colors.textMuted,
+        tabBarShowLabel: true,
+        tabBarActiveTintColor: "#FFFFFF",
+        tabBarInactiveTintColor: "#8E8CAE",
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "600",
-          letterSpacing: 0.5,
+          letterSpacing: 0.2,
+          marginTop: 2,
+          marginBottom: 4,
         },
+        tabBarItemStyle: {
+          paddingTop: 5,
+        }
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: "Wallet",
-          tabBarIcon: ({ color, size }) => <Feather name="credit-card" size={size} color={color} />,
+          title: "Home",
+          tabBarIcon: ({ color, size }) => <Feather name="home" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="pay"
         options={{
           title: "Pay",
-          tabBarIcon: ({ color, size }) => <Feather name="send" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="send" size={22} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="qr"
+        options={{
+          title: "QR",
+          tabBarIcon: ({ focused }) => (
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: "#FFFFFF",
+                justifyContent: "center",
+                alignItems: "center",
+                top: -20, // Make it pop out over the edge of the navbar
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 4 },
+                shadowOpacity: 0.15,
+                shadowRadius: 8,
+                elevation: 5,
+              }}
+            >
+              <Feather name="grid" size={26} color="#111111" />
+            </View>
+          ),
         }}
       />
       <Tabs.Screen
         name="activity"
         options={{
-          title: "Activity",
-          tabBarIcon: ({ color, size }) => <Feather name="clock" size={size} color={color} />,
+          title: "History",
+          tabBarIcon: ({ color, size }) => <Feather name="file-text" size={22} color={color} />,
         }}
       />
       <Tabs.Screen
         name="profile"
         options={{
           title: "Profile",
-          tabBarIcon: ({ color, size }) => <Feather name="user" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Feather name="user" size={22} color={color} />,
         }}
       />
     </Tabs>
