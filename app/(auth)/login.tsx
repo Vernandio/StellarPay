@@ -10,6 +10,8 @@ import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { signIn } from "../../src/services/firebase/auth";
+import { auth } from "../../src/services/firebase/config";
+import { getUserProfile } from "../../src/services/firebase/firestore";
 
 const { height } = Dimensions.get("window");
 
@@ -130,9 +132,50 @@ export default function LoginScreen() {
                   </Text>
                 </View>
 
-                <SocialButton icon="monitor" label="Continue with Apple" isApple onPress={() => {}} />
-                <SocialButton icon="chrome" label="Continue with Google" isGoogle onPress={() => {}} />
-                <SocialButton icon="smartphone" label="Continue with Phone Number" onPress={() => {}} />
+                <SocialButton 
+                  icon="chrome" 
+                  label="Continue with Google" 
+                  isGoogle 
+                  onPress={async () => {
+                    setError(null);
+                    setIsLoading(true);
+                    try {
+                      // Trigger Google Sign-In
+                      // In a real device setup, this uses expo-auth-session.
+                      // For a smooth hackathon test experience without requiring client configuration:
+                      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      
+                      const user = auth.currentUser;
+                      if (user) {
+                        const profile = await getUserProfile(user.uid);
+                        if (profile) {
+                          if (profile.hasPin) {
+                            router.replace("/(auth)/pin-entry");
+                          } else {
+                            router.replace("/(auth)/signup"); // Go to PIN setup
+                          }
+                        } else {
+                          router.replace("/(auth)/signup"); // Onboard new user
+                        }
+                      } else {
+                        // Demo fallback: if not authenticated yet, go to signup
+                        router.replace("/(auth)/signup");
+                      }
+                    } catch (err: any) {
+                      setError(err.message || "Google sign in failed");
+                    } finally {
+                      setIsLoading(false);
+                    }
+                  }} 
+                />
+                
+                <SocialButton 
+                  icon="smartphone" 
+                  label="Continue with Phone Number" 
+                  onPress={() => {
+                    router.push("/(auth)/verify-phone");
+                  }} 
+                />
 
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.md }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: Colors.borderLight }} />

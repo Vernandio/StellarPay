@@ -9,10 +9,13 @@ import { db } from "./config";
 
 export interface UserProfile {
   uid: string;
-  email: string;
+  email: string | null;
   username: string;
   displayName: string;
+  phone: string | null;
   stellarPublicKey: string | null;
+  authProviders?: string[];
+  hasPin?: boolean;
   createdAt: Timestamp;
 }
 

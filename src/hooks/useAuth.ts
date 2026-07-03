@@ -21,5 +21,12 @@ export const useAuth = () => {
     return () => unsubscribe();
   }, []);
 
-  return { user, profile, isLoading, isAuthenticated: !!user };
+  return {
+    user,
+    profile,
+    isLoading,
+    isAuthenticated: !!user,
+    hasProfile: !!profile,
+    hasPin: !!profile?.hasPin,
+  };
 };

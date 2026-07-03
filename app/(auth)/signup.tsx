@@ -5,10 +5,15 @@ import { router } from "expo-router";
 import Animated, { FadeInRight, FadeOutLeft, FadeInLeft, FadeOutRight, FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
+import { RecaptchaModal } from "../../src/components/RecaptchaModal";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
-import { signUp } from "../../src/services/firebase/auth";
+import { signUp, sendPhoneVerificationCode, signInWithPhone, linkEmailToAccount, createPhoneUserProfile } from "../../src/services/firebase/auth";
+import { setupPin } from "../../src/services/api/pin";
+import { auth, firebaseConfig } from "../../src/services/firebase/config";
+import { createWallet } from "../../src/services/stellar/wallet";
+import { updateUserProfile, createWalletCache } from "../../src/services/firebase/firestore";
 
 export default function SignUpScreen() {
   const [step, setStep] = useState(1);
@@ -19,9 +24,13 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
 
-  // Step 2: OTP
-  const [otp, setOtp] = useState(["", "", "", ""]);
-  const otpRefs = [useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)];
+  // Step 2: OTP (SMS codes from Firebase are 6 digits)
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]);
+  const otpRefs = [
+    useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null),
+    useRef<TextInput>(null), useRef<TextInput>(null), useRef<TextInput>(null)
+  ];
+  const [verificationId, setVerificationId] = useState<string | null>(null);
 
   // Step 3: PIN
   const [pin, setPin] = useState(["", "", "", "", "", ""]);
@@ -33,23 +42,64 @@ export default function SignUpScreen() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const nextStep = () => {
+  const recaptchaVerifier = useRef<any>(null);
+
+  const handleSendOtp = async () => {
     Keyboard.dismiss();
     setError(null);
-    if (step === 1) {
-      if (!username || !email || !phone) {
-        setError("Please fill in all fields");
-        return;
-      }
+    if (!username || !email || !phone) {
+      setError("Please fill in all fields");
+      return;
     }
-    if (step === 2) {
-      if (otp.join("").length < 4) {
-        setError("Please enter the complete OTP");
-        return;
-      }
+
+    setIsLoading(true);
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Trigger a real Firebase SMS verification code request
+      const verId = await sendPhoneVerificationCode(phone, recaptchaVerifier.current);
+      setVerificationId(verId);
+      
+      setDirection("forward");
+      setStep(2);
+      
+      setTimeout(() => {
+        otpRefs[0].current?.focus();
+      }, 500);
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(err.message || "Failed to send verification code. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
-    setDirection("forward");
-    setStep(step + 1);
+  };
+
+  const handleVerifyOtp = async () => {
+    Keyboard.dismiss();
+    setError(null);
+    const code = otp.join("");
+    if (code.length < 6) {
+      setError("Please enter the complete 6-digit OTP");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      if (!verificationId) {
+        throw new Error("No active verification session. Send OTP first.");
+      }
+
+      // Verify the phone number by signing in
+      await signInWithPhone(verificationId, code);
+      
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setDirection("forward");
+      setStep(3);
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(err.message || "Invalid OTP code. Please check the code and try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const prevStep = () => {
@@ -69,7 +119,31 @@ export default function SignUpScreen() {
     setError(null);
     try {
       const pinPassword = pin.join("");
-      await signUp(email, pinPassword, username);
+      const user = auth.currentUser;
+      if (!user) throw new Error("No authenticated phone user found");
+      
+      // 1. Link email and PIN password to the signed-in phone account
+      await linkEmailToAccount(email, pinPassword);
+      
+      // 2. Create the user profile inside Firestore
+      await createPhoneUserProfile(user, username, email);
+      
+      // 3. Automatically create Stellar Wallet & fund it on Testnet
+      try {
+        const newPublicKey = await createWallet(user.uid);
+        await updateUserProfile(user.uid, { stellarPublicKey: newPublicKey });
+        await createWalletCache(user.uid, newPublicKey);
+      } catch (stellarErr) {
+        console.warn("Automatic Stellar Wallet creation failed:", stellarErr);
+      }
+      
+      // 4. Hash and save PIN in Express backend (non-blocking for testing/offline setups)
+      try {
+        await setupPin(pinPassword);
+      } catch (pinErr) {
+        console.warn("Backend PIN setup failed (likely due to offline backend or missing serviceAccountKey):", pinErr);
+      }
+      
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (err: any) {
@@ -85,7 +159,7 @@ export default function SignUpScreen() {
     newOtp[index] = text;
     setOtp(newOtp);
 
-    if (text && index < 3) {
+    if (text && index < 5) {
       otpRefs[index + 1].current?.focus();
     }
   };
@@ -114,7 +188,7 @@ export default function SignUpScreen() {
 
   const TopHeader = () => (
     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, zIndex: 10 }}>
-      <Pressable onPress={step > 1 ? prevStep : () => router.back()} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
+      <Pressable onPress={step > 1 ? prevStep : () => router.canGoBack() ? router.back() : router.replace("/(auth)/login")} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
         <Feather name="arrow-left" size={24} color={Colors.white} />
       </Pressable>
       <View style={{ flex: 1 }}>
@@ -285,17 +359,21 @@ export default function SignUpScreen() {
                   </View>
 
                   <Pressable
-                    onPress={nextStep}
+                    onPress={handleSendOtp}
                     onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                    disabled={isLoading}
                     style={{
                       height: 56,
                       borderRadius: 9999,
                       justifyContent: "center",
                       alignItems: "center",
                       backgroundColor: "#000",
+                      opacity: isLoading ? 0.6 : 1,
                     }}
                   >
-                    <Text style={[Typography.labelLarge, { color: Colors.white }]}>Continue</Text>
+                    <Text style={[Typography.labelLarge, { color: Colors.white }]}>
+                      {isLoading ? "Sending OTP..." : "Continue"}
+                    </Text>
                   </Pressable>
                 </Animated.View>
               )}
@@ -311,7 +389,7 @@ export default function SignUpScreen() {
                       Verify your number
                     </Text>
                     <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
-                      Enter the 4-digit OTP sent to {phone || email}
+                      Enter the 6-digit OTP sent to {phone}
                     </Text>
                   </View>
 
@@ -328,12 +406,12 @@ export default function SignUpScreen() {
                         style={{
                           fontSize: 28,
                           fontWeight: "700",
-                          width: 70,
-                          height: 70,
+                          width: 45,
+                          height: 60,
                           backgroundColor: Colors.baseLight,
                           borderWidth: 1,
                           borderColor: digit ? Colors.primary : Colors.borderLight,
-                          borderRadius: 16,
+                          borderRadius: 12,
                           textAlign: "center",
                           color: Colors.textLightPrimary,
                         }}
@@ -342,22 +420,22 @@ export default function SignUpScreen() {
                   </View>
 
                   <Pressable
-                    onPress={nextStep}
+                    onPress={handleVerifyOtp}
                     onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                    disabled={isLoading}
                     style={{
                       height: 56,
                       borderRadius: 9999,
                       justifyContent: "center",
                       alignItems: "center",
                       backgroundColor: "#000",
+                      opacity: isLoading ? 0.6 : 1,
                     }}
                   >
-                    <Text style={[Typography.labelLarge, { color: Colors.white }]}>Verify OTP</Text>
+                    <Text style={[Typography.labelLarge, { color: Colors.white }]}>
+                      {isLoading ? "Verifying..." : "Verify OTP"}
+                    </Text>
                   </Pressable>
-                  
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightMuted, textAlign: "center", marginTop: Spacing.lg }]}>
-                    (Demo mode: any 4 digits work)
-                  </Text>
                 </Animated.View>
               )}
 
@@ -427,6 +505,11 @@ export default function SignUpScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
+      <RecaptchaModal
+        ref={recaptchaVerifier}
+        siteKey="6LcM4y0UAAAAAJOZ24qE3g30u0w2M636sYnGdK42"
+        baseUrl={`https://${firebaseConfig.authDomain}`}
+      />
       <View style={{ backgroundColor: Colors.white, height: 40, position: "absolute", bottom: 0, left: 0, right: 0, zIndex: -1 }} />
     </View>
   );

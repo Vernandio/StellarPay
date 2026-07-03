@@ -95,7 +95,7 @@ export default function SwapScreen() {
               <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3, zIndex: 1 }}>
                 <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: Spacing.sm }}>
                   <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500" }]}>You pay</Text>
-                  <Text style={[Typography.labelMedium, { color: Colors.textLightSecondary }]}>Available: {Number(payBalance).toLocaleString()} {payCurrency}</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary }]}>Available: {Number(payBalance).toLocaleString()} {payCurrency}</Text>
                 </View>
                 
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -147,7 +147,7 @@ export default function SwapScreen() {
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
                 1 {payCurrency} ≈ {currentRate} {receiveCurrency}
               </Text>
-              <Text style={[Typography.labelSmall, { color: Colors.success, marginTop: 4 }]}>
+              <Text style={[Typography.labelSmall, { color: Colors.teal, marginTop: 4 }]}>
                 No network fees
               </Text>
             </View>

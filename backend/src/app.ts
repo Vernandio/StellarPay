@@ -6,6 +6,7 @@ import { errorHandler } from "./middlewares/errorHandler";
 
 import healthRoutes from "./routes/healthRoutes";
 import authRoutes from "./routes/authRoutes";
+import pinRoutes from "./routes/pinRoutes";
 
 const app: Application = express();
 
@@ -19,6 +20,7 @@ app.use(globalRateLimiter);
 // Routes
 app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
+app.use("/api/pin", pinRoutes);
 
 // Global Error Handler
 app.use(errorHandler);
