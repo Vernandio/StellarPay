@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, KeyboardAvoidingView, Platform, Pressable, TextInput, Image, Dimensions, ScrollView } from "react-native";
+import { View, Text, KeyboardAvoidingView, Platform, Pressable, TextInput, Image, Dimensions, ScrollView, Modal, FlatList, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Animated, { FadeInRight, FadeOutLeft, FadeInLeft, FadeOutRight, FadeInDown } from "react-native-reanimated";
@@ -17,6 +17,23 @@ export default function VerifyPhoneScreen() {
   const [step, setStep] = useState(1);
   const [direction, setDirection] = useState<"forward" | "backward">("forward");
   const [phone, setPhone] = useState("");
+  const [countryCode, setCountryCode] = useState("+62");
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+
+  const COUNTRIES = [
+    { code: "+62", label: "Indonesia", flag: "🇮🇩" },
+    { code: "+1", label: "United States", flag: "🇺🇸" },
+    { code: "+44", label: "United Kingdom", flag: "🇬🇧" },
+    { code: "+65", label: "Singapore", flag: "🇸🇬" },
+    { code: "+60", label: "Malaysia", flag: "🇲🇾" },
+    { code: "+63", label: "Philippines", flag: "🇵🇭" },
+    { code: "+66", label: "Thailand", flag: "🇹🇭" },
+    { code: "+84", label: "Vietnam", flag: "🇻🇳" },
+    { code: "+91", label: "India", flag: "🇮🇳" },
+    { code: "+81", label: "Japan", flag: "🇯🇵" },
+    { code: "+82", label: "South Korea", flag: "🇰🇷" },
+    { code: "+61", label: "Australia", flag: "🇦🇺" },
+  ];
   const [otp, setOtp] = useState(["", "", "", "", "", ""]); // Firebase SMS OTP is 6 digits
   const [verificationId, setVerificationId] = useState<string | null>(null);
   
@@ -40,8 +57,20 @@ export default function VerifyPhoneScreen() {
     setError(null);
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      // Format phone to E.164 standard required by Firebase
+      let rawPhone = phone.trim().replace(/[\s-]/g, "");
+      
+      // If user typed '08...', strip the '0' since we have the country code prefix
+      if (rawPhone.startsWith("0")) {
+        rawPhone = rawPhone.substring(1);
+      }
+      
+      // If they typed '+' manually, assume they typed the full international number
+      let formattedPhone = rawPhone.startsWith("+") ? rawPhone : `${countryCode}${rawPhone}`;
+
       // Trigger a real Firebase SMS verification code request using reCAPTCHA modal verifier
-      const verId = await sendPhoneVerificationCode(phone, recaptchaVerifier.current);
+      const verId = await sendPhoneVerificationCode(formattedPhone, recaptchaVerifier.current);
       setVerificationId(verId);
       
       setDirection("forward");
@@ -186,24 +215,47 @@ export default function VerifyPhoneScreen() {
 
                   <View style={{ marginBottom: Spacing.xl }}>
                     <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, marginBottom: Spacing.xs, marginLeft: Spacing.xs }]}>Phone Number</Text>
-                    <TextInput
-                      value={phone}
-                      onChangeText={setPhone}
-                      placeholder="+62 812 3456 7890"
-                      placeholderTextColor={Colors.textLightMuted}
-                      keyboardType="phone-pad"
-                      style={{
-                        fontFamily: "Inter-Regular",
-                        fontSize: 16,
-                        backgroundColor: Colors.baseLight,
-                        borderWidth: 1,
-                        borderColor: Colors.borderLight,
-                        borderRadius: 16,
-                        height: 56,
-                        paddingHorizontal: Spacing.md,
-                        color: Colors.textLightPrimary,
-                      }}
-                    />
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Pressable 
+                        onPress={() => setShowCountryPicker(true)}
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          backgroundColor: Colors.baseLight,
+                          borderWidth: 1,
+                          borderColor: Colors.borderLight,
+                          borderRadius: 16,
+                          height: 56,
+                          paddingHorizontal: Spacing.md,
+                          marginRight: Spacing.sm,
+                        }}
+                      >
+                        <Text style={{ fontSize: 16, color: Colors.textLightPrimary, marginRight: 4 }}>
+                          {COUNTRIES.find(c => c.code === countryCode)?.flag} {countryCode}
+                        </Text>
+                        <Feather name="chevron-down" size={16} color={Colors.textLightSecondary} />
+                      </Pressable>
+                      
+                      <TextInput
+                        value={phone}
+                        onChangeText={setPhone}
+                        placeholder="812 3456 7890"
+                        placeholderTextColor={Colors.textLightMuted}
+                        keyboardType="phone-pad"
+                        style={{
+                          flex: 1,
+                          fontFamily: "Inter-Regular",
+                          fontSize: 16,
+                          backgroundColor: Colors.baseLight,
+                          borderWidth: 1,
+                          borderColor: Colors.borderLight,
+                          borderRadius: 16,
+                          height: 56,
+                          paddingHorizontal: Spacing.md,
+                          color: Colors.textLightPrimary,
+                        }}
+                      />
+                    </View>
                   </View>
 
                   <Pressable
@@ -297,6 +349,39 @@ export default function VerifyPhoneScreen() {
         siteKey="6LcM4y0UAAAAAJOZ24qE3g30u0w2M636sYnGdK42"
         baseUrl={`https://${firebaseConfig.authDomain}`}
       />
+      
+      {/* Country Code Picker Modal */}
+      <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
+        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
+          <View style={{ backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, maxHeight: Dimensions.get("window").height * 0.7 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+              <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>Select Country</Text>
+              <Pressable onPress={() => setShowCountryPicker(false)} style={{ padding: Spacing.xs }}>
+                <Feather name="x" size={24} color={Colors.textLightSecondary} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={COUNTRIES}
+              keyExtractor={(item) => item.code}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight }}
+                  onPress={() => {
+                    setCountryCode(item.code);
+                    setShowCountryPicker(false);
+                  }}
+                >
+                  <Text style={{ fontSize: 24, marginRight: Spacing.md }}>{item.flag}</Text>
+                  <Text style={[Typography.bodyLarge, { flex: 1, color: Colors.textLightPrimary }]}>{item.label}</Text>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{item.code}</Text>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        </View>
+      </Modal>
+
       <View style={{ backgroundColor: Colors.white, height: 40, position: "absolute", bottom: 0, left: 0, right: 0, zIndex: -1 }} />
     </View>
   );
