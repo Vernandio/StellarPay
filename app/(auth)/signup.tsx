@@ -9,7 +9,7 @@ import { RecaptchaModal } from "../../src/components/RecaptchaModal";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
-import { signUp, sendPhoneVerificationCode, signInWithPhone, linkEmailToAccount, createPhoneUserProfile } from "../../src/services/firebase/auth";
+import { signUp, sendEmailVerificationCode, signInWithEmailOtp, linkEmailToAccount, createPhoneUserProfile } from "../../src/services/firebase/auth";
 import { setupPin } from "../../src/services/api/pin";
 import { auth, firebaseConfig } from "../../src/services/firebase/config";
 import { createWallet } from "../../src/services/stellar/wallet";
@@ -84,8 +84,8 @@ export default function SignUpScreen() {
       // If they typed '+' manually, assume they typed the full international number
       let formattedPhone = rawPhone.startsWith("+") ? rawPhone : `${countryCode}${rawPhone}`;
 
-      // Trigger a real Firebase SMS verification code request
-      const verId = await sendPhoneVerificationCode(formattedPhone, recaptchaVerifier.current);
+      // Trigger OTP email request from the backend
+      const verId = await sendEmailVerificationCode(email);
       setVerificationId(verId);
       
       setDirection("forward");
@@ -117,8 +117,8 @@ export default function SignUpScreen() {
         throw new Error("No active verification session. Send OTP first.");
       }
 
-      // Verify the phone number by signing in
-      await signInWithPhone(verificationId, code);
+      // Verify the OTP by signing in via the backend custom token
+      await signInWithEmailOtp(email, code);
       
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setDirection("forward");
@@ -184,6 +184,20 @@ export default function SignUpScreen() {
   };
 
   const handleOtpChange = (text: string, index: number) => {
+    if (text.length > 1) {
+      const pastedData = text.replace(/[^0-9]/g, "").slice(0, 6).split("");
+      const newOtp = [...otp];
+      pastedData.forEach((char, i) => {
+        if (index + i < 6) {
+          newOtp[index + i] = char;
+        }
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + pastedData.length, 5);
+      otpRefs[nextIndex].current?.focus();
+      return;
+    }
+
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
@@ -200,6 +214,20 @@ export default function SignUpScreen() {
   };
 
   const handlePinChange = (text: string, index: number) => {
+    if (text.length > 1) {
+      const pastedData = text.replace(/[^0-9]/g, "").slice(0, 6).split("");
+      const newPin = [...pin];
+      pastedData.forEach((char, i) => {
+        if (index + i < 6) {
+          newPin[index + i] = char;
+        }
+      });
+      setPin(newPin);
+      const nextIndex = Math.min(index + pastedData.length, 5);
+      pinRefs[nextIndex].current?.focus();
+      return;
+    }
+
     const newPin = [...pin];
     newPin[index] = text;
     setPin(newPin);
@@ -441,7 +469,7 @@ export default function SignUpScreen() {
                       Verify your number
                     </Text>
                     <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
-                      Enter the 6-digit OTP sent to {phone}
+                      Enter the 6-digit OTP sent to your email
                     </Text>
                   </View>
 
@@ -454,7 +482,7 @@ export default function SignUpScreen() {
                         onChangeText={(text) => handleOtpChange(text, index)}
                         onKeyPress={(e) => handleOtpKeyPress(e, index)}
                         keyboardType="number-pad"
-                        maxLength={1}
+                        maxLength={6}
                         style={{
                           fontSize: 28,
                           fontWeight: "700",
@@ -515,7 +543,7 @@ export default function SignUpScreen() {
                         onChangeText={(text) => handlePinChange(text, index)}
                         onKeyPress={(e) => handlePinKeyPress(e, index)}
                         keyboardType="number-pad"
-                        maxLength={1}
+                        maxLength={6}
                         secureTextEntry
                         style={{
                           fontSize: 28,
@@ -557,12 +585,6 @@ export default function SignUpScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <RecaptchaModal
-        ref={recaptchaVerifier}
-        siteKey="6LcM4y0UAAAAAJOZ24qE3g30u0w2M636sYnGdK42"
-        baseUrl={`https://${firebaseConfig.authDomain}`}
-      />
-      
       {/* Country Code Picker Modal */}
       <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>

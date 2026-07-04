@@ -31,7 +31,7 @@
     "lottie-react-native": "~7.3.4",
     "nativewind": "^4.2.6",
     "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react-dom": "^19.1.0",
     "react-native": "0.81.5",
     "react-native-gesture-handler": "~2.28.0",
     "react-native-get-random-values": "~1.11.0",
@@ -45,6 +45,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@types/expo__vector-icons": "^9.0.1",
     "@types/node": "^26.0.1",
     "@types/react": "~19.1.10",
     "tailwindcss": "^3.3.2",

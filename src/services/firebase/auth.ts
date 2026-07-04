@@ -6,12 +6,13 @@ import {
   signInWithCredential,
   linkWithCredential,
   GoogleAuthProvider,
-  PhoneAuthProvider,
   EmailAuthProvider,
+  signInWithCustomToken,
   User,
 } from "@firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "@firebase/firestore";
 import { auth, db } from "./config";
+import { apiClient } from "../api/client";
 
 // ── Email / Password Auth ─────────────────────────────────────────────
 
@@ -75,17 +76,14 @@ export const createGoogleUserProfile = async (
   });
 };
 
-// ── Phone Auth ────────────────────────────────────────────────────────
-
 /**
- * Signs in using a phone verification credential.
- * The verificationId is obtained from the reCAPTCHA WebView,
- * and the OTP code is entered by the user.
+ * Signs in using an email OTP.
+ * The backend verifies the OTP and returns a custom Firebase token.
  */
-export const signInWithPhone = async (verificationId: string, otp: string) => {
-  const credential = PhoneAuthProvider.credential(verificationId, otp);
-  const result = await signInWithCredential(auth, credential);
-  return result.user;
+export const signInWithEmailOtp = async (email: string, otp: string) => {
+  const result = await apiClient.post<{ customToken: string }>("/api/auth/verify-otp", { email, otp });
+  const cred = await signInWithCustomToken(auth, result.customToken);
+  return cred.user;
 };
 
 /**
@@ -110,19 +108,12 @@ export const createPhoneUserProfile = async (
   });
 };
 
-// ── Account Linking ───────────────────────────────────────────────────
-
 /**
- * Links phone credentials to the currently signed-in user.
- * Used when a Google/email user verifies their phone number.
+ * Verifies email OTP when a user adds a phone number to their account.
  */
-export const linkPhoneToAccount = async (verificationId: string, otp: string) => {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error("No user is currently signed in");
-
-  const credential = PhoneAuthProvider.credential(verificationId, otp);
-  const result = await linkWithCredential(currentUser, credential);
-  return result.user;
+export const verifyEmailOtpForLinking = async (email: string, otp: string) => {
+  await apiClient.post("/api/auth/verify-otp", { email, otp });
+  return true;
 };
 
 export const linkEmailToAccount = async (email: string, password: string) => {
@@ -167,47 +158,12 @@ export const getLinkedProviders = (): string[] => {
 };
 
 /**
- * A custom implementation of Firebase's ApplicationVerifier interface.
- * Bridges Firebase Auth with our React Native WebView reCAPTCHA Modal.
+ * Triggers a 6-digit OTP email from the backend.
+ * Returns the email string as the verificationId.
  */
-class CustomApplicationVerifier {
-  type = "recaptcha";
-  private modalRef: { verify: () => Promise<string> } | null;
-
-  constructor(modalRef: any) {
-    this.modalRef = modalRef;
-  }
-
-  async verify(): Promise<string> {
-    if (!this.modalRef || !this.modalRef.verify) {
-      throw new Error("reCAPTCHA modal reference is not mounted or accessible");
-    }
-    return this.modalRef.verify();
-  }
-
-  // Required by Firebase Auth JS SDK internally
-  _reset() {
-    // Optional: add any logic to reset your custom modal state if necessary
-  }
-
-  clear() {
-    // Optional: add any logic to clear your custom modal state if necessary
-  }
-}
-
-/**
- * Triggers a real Firebase SMS verification to a phone number.
- * Returns a verificationId that must be verified using the code.
- */
-export const sendPhoneVerificationCode = async (
-  phoneNumber: string,
-  recaptchaModalRef: any
+export const sendEmailVerificationCode = async (
+  email: string
 ): Promise<string> => {
-  const phoneProvider = new PhoneAuthProvider(auth);
-  const verifier = new CustomApplicationVerifier(recaptchaModalRef);
-  const verificationId = await phoneProvider.verifyPhoneNumber(
-    phoneNumber,
-    verifier
-  );
-  return verificationId;
+  await apiClient.post("/api/auth/send-otp", { email });
+  return email;
 };

@@ -9,7 +9,7 @@ import { RecaptchaModal } from "../../src/components/RecaptchaModal";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
-import { linkPhoneToAccount, sendPhoneVerificationCode } from "../../src/services/firebase/auth";
+import { verifyEmailOtpForLinking, sendEmailVerificationCode } from "../../src/services/firebase/auth";
 import { updateUserProfile } from "../../src/services/firebase/firestore";
 import { auth, firebaseConfig } from "../../src/services/firebase/config";
 
@@ -58,19 +58,18 @@ export default function VerifyPhoneScreen() {
     try {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
-      // Format phone to E.164 standard required by Firebase
+      // Format phone to E.164 standard
       let rawPhone = phone.trim().replace(/[\s-]/g, "");
-      
-      // If user typed '08...', strip the '0' since we have the country code prefix
       if (rawPhone.startsWith("0")) {
         rawPhone = rawPhone.substring(1);
       }
-      
-      // If they typed '+' manually, assume they typed the full international number
       let formattedPhone = rawPhone.startsWith("+") ? rawPhone : `${countryCode}${rawPhone}`;
 
-      // Trigger a real Firebase SMS verification code request using reCAPTCHA modal verifier
-      const verId = await sendPhoneVerificationCode(formattedPhone, recaptchaVerifier.current);
+      const user = auth.currentUser;
+      if (!user?.email) throw new Error("No email associated with this account");
+
+      // Trigger an OTP email request from the backend
+      const verId = await sendEmailVerificationCode(user.email);
       setVerificationId(verId);
       
       setDirection("forward");
@@ -89,6 +88,20 @@ export default function VerifyPhoneScreen() {
   };
 
   const handleOtpChange = (text: string, index: number) => {
+    if (text.length > 1) {
+      const pastedData = text.replace(/[^0-9]/g, "").slice(0, 6).split("");
+      const newOtp = [...otp];
+      pastedData.forEach((char, i) => {
+        if (index + i < 6) {
+          newOtp[index + i] = char;
+        }
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + pastedData.length, 5);
+      otpRefs[nextIndex].current?.focus();
+      return;
+    }
+
     const newOtp = [...otp];
     newOtp[index] = text;
     setOtp(newOtp);
@@ -121,11 +134,17 @@ export default function VerifyPhoneScreen() {
         throw new Error("No active verification session found. Send OTP first.");
       }
 
-      // Link SMS OTP credentials to the existing authenticated account
-      await linkPhoneToAccount(verificationId, code);
+      // Verify the OTP via backend
+      await verifyEmailOtpForLinking(user.email!, code);
       
-      // Update database profile record with verified phone number
-      await updateUserProfile(user.uid, { phone: user.phoneNumber || phone });
+      // Update database profile record with the new phone number
+      // We format it again here to be absolutely safe
+      let rawPhoneFinal = phone.trim().replace(/[\s-]/g, "");
+      if (rawPhoneFinal.startsWith("0")) {
+        rawPhoneFinal = rawPhoneFinal.substring(1);
+      }
+      let finalFormattedPhone = rawPhoneFinal.startsWith("+") ? rawPhoneFinal : `${countryCode}${rawPhoneFinal}`;
+      await updateUserProfile(user.uid, { phone: finalFormattedPhone });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       
@@ -288,7 +307,7 @@ export default function VerifyPhoneScreen() {
                       Enter 6-Digit Code
                     </Text>
                     <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
-                      Sent via SMS to {phone}
+                      Sent via email to your registered address
                     </Text>
                   </View>
 
@@ -301,7 +320,7 @@ export default function VerifyPhoneScreen() {
                         onChangeText={(text) => handleOtpChange(text, index)}
                         onKeyPress={(e) => handleOtpKeyPress(e, index)}
                         keyboardType="number-pad"
-                        maxLength={1}
+                        maxLength={6}
                         style={{
                           fontSize: 28,
                           fontWeight: "700",
@@ -344,12 +363,6 @@ export default function VerifyPhoneScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <RecaptchaModal
-        ref={recaptchaVerifier}
-        siteKey="6LcM4y0UAAAAAJOZ24qE3g30u0w2M636sYnGdK42"
-        baseUrl={`https://${firebaseConfig.authDomain}`}
-      />
-      
       {/* Country Code Picker Modal */}
       <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>

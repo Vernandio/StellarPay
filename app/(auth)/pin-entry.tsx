@@ -30,18 +30,31 @@ export default function PinEntryScreen() {
   }, []);
 
   const handlePinChange = async (text: string, index: number) => {
-    const newPin = [...pin];
-    newPin[index] = text;
-    setPin(newPin);
+    let newPinArray = [...pin];
 
-    // If text entered, focus next input
-    if (text && index < 5) {
-      pinRefs[index + 1].current?.focus();
+    if (text.length > 1) {
+      const pastedData = text.replace(/[^0-9]/g, "").slice(0, 6).split("");
+      pastedData.forEach((char, i) => {
+        if (index + i < 6) {
+          newPinArray[index + i] = char;
+        }
+      });
+      setPin(newPinArray);
+      const nextIndex = Math.min(index + pastedData.length, 5);
+      pinRefs[nextIndex].current?.focus();
+    } else {
+      newPinArray[index] = text;
+      setPin(newPinArray);
+
+      // If text entered, focus next input
+      if (text && index < 5) {
+        pinRefs[index + 1].current?.focus();
+      }
     }
 
-    // Trigger verification if the last digit is entered
-    if (newPin.join("").length === 6) {
-      await verifyCode(newPin.join(""));
+    // Trigger verification if all 6 digits are entered
+    if (newPinArray.join("").length === 6) {
+      await verifyCode(newPinArray.join(""));
     }
   };
 
@@ -150,7 +163,7 @@ export default function PinEntryScreen() {
                     onChangeText={(text) => handlePinChange(text, index)}
                     onKeyPress={(e) => handlePinKeyPress(e, index)}
                     keyboardType="number-pad"
-                    maxLength={1}
+                    maxLength={6}
                     secureTextEntry
                     editable={!isLoading}
                     style={{
