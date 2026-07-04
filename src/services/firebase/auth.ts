@@ -184,6 +184,15 @@ class CustomApplicationVerifier {
     }
     return this.modalRef.verify();
   }
+
+  // Required by Firebase Auth JS SDK internally
+  _reset() {
+    // Optional: add any logic to reset your custom modal state if necessary
+  }
+
+  clear() {
+    // Optional: add any logic to clear your custom modal state if necessary
+  }
 }
 
 /**
