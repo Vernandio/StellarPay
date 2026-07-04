@@ -30,5 +30,5 @@ export default function Index() {
   }
 
   // Not authenticated
-  return <Redirect href="/(auth)/login" />;
+  return <Redirect href="/(auth)/landing" />;
 }

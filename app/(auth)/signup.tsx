@@ -245,7 +245,7 @@ export default function SignUpScreen() {
 
   const TopHeader = () => (
     <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, zIndex: 10 }}>
-      <Pressable onPress={step > 1 ? prevStep : () => router.canGoBack() ? router.back() : router.replace("/(auth)/login")} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
+      <Pressable onPress={step > 1 ? prevStep : () => router.canGoBack() ? router.back() : router.replace("/(auth)/landing")} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
         <Feather name="arrow-left" size={24} color={Colors.white} />
       </Pressable>
       <View style={{ flex: 1 }}>

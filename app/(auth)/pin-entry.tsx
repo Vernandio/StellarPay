@@ -89,7 +89,7 @@ export default function PinEntryScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {
       await signOut();
-      router.replace("/(auth)/login");
+      router.replace("/(auth)/landing");
     } catch (err) {
       console.error("Signout error:", err);
     }

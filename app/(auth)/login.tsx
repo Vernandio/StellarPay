@@ -1,300 +1,484 @@
-import { useState } from "react";
-import { View, Text, KeyboardAvoidingView, Platform, Pressable, TextInput, Image, Dimensions } from "react-native";
+import { useState, useRef } from "react";
+import {
+  View, Text, Pressable, TextInput, Image,
+  Dimensions, KeyboardAvoidingView, Platform, ScrollView, Modal,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
-import { signIn } from "../../src/services/firebase/auth";
+import { signInWithCustomToken } from "@firebase/auth";
 import { auth } from "../../src/services/firebase/config";
+import { resolveUser, sendForgotPinOtp, verifyForgotPinOtp } from "../../src/services/api/auth";
+import { verifyPin, setupPin } from "../../src/services/api/pin";
 import { getUserProfile } from "../../src/services/firebase/firestore";
+import { apiClient } from "../../src/services/api/client";
 
-const { height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
+
+// ── Step IDs ────────────────────────────────────────────────────────────
+type Step = "identifier" | "pin" | "forgot_send" | "forgot_verify" | "forgot_newpin";
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  // ── Shared state ──────────────────────────────────────────────────────
+  const [step, setStep] = useState<Step>("identifier");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showEmailLogin, setShowEmailLogin] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      setError("Please enter your email/username and password");
-      return;
-    }
+  // ── Identifier step ───────────────────────────────────────────────────
+  const [identifier, setIdentifier] = useState("");
+  const [resolvedEmail, setResolvedEmail] = useState("");
+
+  // ── PIN step ──────────────────────────────────────────────────────────
+  const [pin, setPin] = useState(["", "", "", "", "", ""]);
+  const pinRefs = Array.from({ length: 6 }, () => useRef<TextInput>(null));
+
+  // ── Forgot PIN ────────────────────────────────────────────────────────
+  const [forgotOtp, setForgotOtp] = useState("");
+  const [newPin, setNewPin] = useState(["", "", "", "", "", ""]);
+  const newPinRefs = Array.from({ length: 6 }, () => useRef<TextInput>(null));
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Step 1: Resolve identifier → email
+  // ─────────────────────────────────────────────────────────────────────
+  const handleResolve = async () => {
+    if (!identifier.trim()) { setError("Please enter your email, phone, or username"); return; }
     setIsLoading(true);
     setError(null);
     try {
-      await signIn(email, password);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace("/(tabs)");
+      const result = await resolveUser(identifier.trim());
+      setResolvedEmail(result.email ?? "");
+      setStep("pin");
+      setTimeout(() => pinRefs[0].current?.focus(), 400);
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(err.message || "Failed to sign in. Please check your credentials.");
+      setError(err.message || "Account not found. Please check your input.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const SocialButton = ({ icon, label, onPress, isGoogle = false, isApple = false }: any) => (
-    <Pressable
-      onPress={() => {
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-        onPress();
-      }}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        backgroundColor: Colors.white,
-        height: 56,
-        borderRadius: 16,
-        marginBottom: Spacing.sm,
-        borderWidth: 1,
-        borderColor: Colors.borderLightStrong,
-        paddingHorizontal: Spacing.lg,
-      }}
-    >
-      {isApple ? (
-        <View style={{ backgroundColor: "#000", width: 28, height: 28, borderRadius: 8, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-          <Feather name="aperture" size={16} color="#FFF" />
-        </View>
-      ) : (
-        <Feather name={icon} size={24} color={isGoogle ? Colors.amber : Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
+  // ─────────────────────────────────────────────────────────────────────
+  // Step 2: Verify PIN
+  // ─────────────────────────────────────────────────────────────────────
+  const handlePinChange = async (text: string, index: number) => {
+    let arr = [...pin];
+    if (text.length > 1) {
+      const pasted = text.replace(/\D/g, "").slice(0, 6).split("");
+      pasted.forEach((c, i) => { if (index + i < 6) arr[index + i] = c; });
+      setPin(arr);
+      pinRefs[Math.min(index + pasted.length, 5)].current?.focus();
+    } else {
+      arr[index] = text;
+      setPin(arr);
+      if (text && index < 5) pinRefs[index + 1].current?.focus();
+    }
+    if (arr.join("").length === 6) await verifyPinCode(arr.join(""));
+  };
+
+  const handlePinKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === "Backspace" && !pin[index] && index > 0) {
+      pinRefs[index - 1].current?.focus();
+    }
+  };
+
+  const verifyPinCode = async (code: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      // Sign in the Firebase user by their resolved email via OTP (no password needed)
+      // In this flow, the backend already issued a customToken during OTP verification.
+      // Here we just call verifyPin which requires an authenticated session.
+      // If no session, sign in via the backend resolve endpoint with a temp token.
+      if (!auth.currentUser) {
+        const { customToken } = await apiClient.post<{ customToken: string }>(
+          "/api/auth/resolve-user-token",
+          { email: resolvedEmail }
+        );
+        await signInWithCustomToken(auth, customToken);
+      }
+
+      const valid = await verifyPin(code);
+      if (!valid) throw new Error("Incorrect PIN. Please try again.");
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setError(err.message || "Incorrect PIN. Please try again.");
+      setPin(["", "", "", "", "", ""]);
+      pinRefs[0].current?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Forgot PIN: Send OTP
+  // ─────────────────────────────────────────────────────────────────────
+  const handleForgotSend = async () => {
+    if (!resolvedEmail) { setError("Could not determine account email"); return; }
+    setIsLoading(true);
+    setError(null);
+    try {
+      await sendForgotPinOtp(resolvedEmail);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStep("forgot_verify");
+    } catch (err: any) {
+      setError(err.message || "Failed to send reset code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Forgot PIN: Verify OTP
+  // ─────────────────────────────────────────────────────────────────────
+  const handleForgotVerify = async () => {
+    if (forgotOtp.trim().length < 8) { setError("Please enter the full 8-character reset code"); return; }
+    setIsLoading(true);
+    setError(null);
+    try {
+      const { customToken } = await verifyForgotPinOtp(resolvedEmail, forgotOtp.trim());
+      await signInWithCustomToken(auth, customToken);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setStep("forgot_newpin");
+      setTimeout(() => newPinRefs[0].current?.focus(), 400);
+    } catch (err: any) {
+      setError(err.message || "Invalid reset code");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Forgot PIN: Set new PIN
+  // ─────────────────────────────────────────────────────────────────────
+  const handleNewPinChange = async (text: string, index: number) => {
+    let arr = [...newPin];
+    if (text.length > 1) {
+      const pasted = text.replace(/\D/g, "").slice(0, 6).split("");
+      pasted.forEach((c, i) => { if (index + i < 6) arr[index + i] = c; });
+      setNewPin(arr);
+      newPinRefs[Math.min(index + pasted.length, 5)].current?.focus();
+    } else {
+      arr[index] = text;
+      setNewPin(arr);
+      if (text && index < 5) newPinRefs[index + 1].current?.focus();
+    }
+    if (arr.join("").length === 6) await handleSetNewPin(arr.join(""));
+  };
+
+  const handleNewPinKeyPress = (e: any, index: number) => {
+    if (e.nativeEvent.key === "Backspace" && !newPin[index] && index > 0) {
+      newPinRefs[index - 1].current?.focus();
+    }
+  };
+
+  const handleSetNewPin = async (code: string) => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      await setupPin(code);
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err: any) {
+      setError(err.message || "Failed to set new PIN");
+      setNewPin(["", "", "", "", "", ""]);
+      newPinRefs[0].current?.focus();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Shared sub-components
+  // ─────────────────────────────────────────────────────────────────────
+  const PinRow = ({
+    values, refs, onChange, onKeyPress, label, sublabel,
+  }: {
+    values: string[]; refs: any[]; onChange: (t: string, i: number) => void;
+    onKeyPress: (e: any, i: number) => void; label: string; sublabel: string;
+  }) => (
+    <Animated.View entering={FadeIn.duration(250)}>
+      <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.xs }]}>{label}</Text>
+      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>{sublabel}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: Spacing.xl }}>
+        {values.map((digit, i) => (
+          <TextInput
+            key={i}
+            ref={refs[i]}
+            value={digit}
+            onChangeText={(t) => onChange(t, i)}
+            onKeyPress={(e) => onKeyPress(e, i)}
+            keyboardType="number-pad"
+            maxLength={6}
+            secureTextEntry
+            editable={!isLoading}
+            style={{
+              fontSize: 28, fontWeight: "700",
+              width: 50, height: 60,
+              backgroundColor: Colors.baseLight,
+              borderWidth: 1.5,
+              borderColor: digit ? Colors.primary : Colors.borderLight,
+              borderRadius: 14,
+              textAlign: "center",
+              color: Colors.textLightPrimary,
+            }}
+          />
+        ))}
+      </View>
+      {isLoading && (
+        <Text style={[Typography.bodySmall, { color: Colors.textLightMuted, textAlign: "center" }]}>Verifying…</Text>
       )}
-      <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600", flex: 1 }]}>{label}</Text>
-      <Feather name="chevron-right" size={20} color={Colors.textLightMuted} />
-    </Pressable>
+    </Animated.View>
   );
 
+  // ─────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
-
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, justifyContent: "space-between" }}
         >
-          {/* Top Section */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={{ flex: 1, position: "relative" }}>
-            
-            {/* Background Globe - Absolute positioned behind everything */}
-            <View style={{ position: "absolute", bottom: -100, left: 0, right: 0, alignItems: "center", zIndex: -1, overflow: "hidden" }}>
-              <Image 
-                source={require("../../assets/images/globe.png")} 
-                style={{ width: Dimensions.get("window").width, height: 400, opacity: 0.7, resizeMode: "cover" }}
-              />
+          {/* Globe hero */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={{ flex: 0.65, position: "relative" }}>
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl }}>
+              <Pressable
+                onPress={() => {
+                  if (step === "pin") { setStep("identifier"); setPin(["","","","","",""]); setError(null); }
+                  else if (step === "forgot_send") { setStep("pin"); setError(null); }
+                  else if (step === "forgot_verify") { setStep("forgot_send"); setError(null); }
+                  else if (step === "forgot_newpin") { setStep("forgot_verify"); setError(null); }
+                  else router.canGoBack() ? router.back() : router.replace("/(auth)/landing");
+                }}
+                style={{ padding: Spacing.xs, marginRight: Spacing.md }}
+              >
+                <Feather name="arrow-left" size={24} color={Colors.white} />
+              </Pressable>
+              <Text style={{ fontSize: 20, fontWeight: "700", color: Colors.white }}>Sign In</Text>
             </View>
 
-            {/* Logo at Top */}
-            <View style={{ alignItems: "center", paddingTop: Spacing.xxl }}>
-              <Feather name="aperture" size={56} color={Colors.white} style={{ marginBottom: Spacing.md }} />
-              <Text style={{ fontSize: 44, fontWeight: "800", color: Colors.white, marginBottom: Spacing.xs, letterSpacing: -1 }}>
-                Stellar<Text style={{ fontWeight: "400" }}>Pay</Text>
-              </Text>
-              <Text style={[Typography.bodyLarge, { color: "rgba(255,255,255,0.6)", letterSpacing: 0.5 }]}>
-                Fast. Secure. Borderless.
-              </Text>
+            <View style={{ position: "absolute", bottom: -60, left: 0, right: 0, alignItems: "center", zIndex: -1, overflow: "hidden" }}>
+              <Image
+                source={require("../../assets/images/globe.png")}
+                style={{ width, height: 380, opacity: 0.65, resizeMode: "cover" }}
+              />
             </View>
           </Animated.View>
 
-          {/* Bottom Card */}
-          <Animated.View 
-            entering={FadeInDown.duration(400).delay(300).springify()}
+          {/* Bottom card */}
+          <Animated.View
+            entering={FadeInDown.duration(400).delay(250).springify()}
             style={{
               backgroundColor: Colors.white,
-              borderTopLeftRadius: 32,
-              borderTopRightRadius: 32,
-              paddingTop: Spacing.lg,
-              paddingHorizontal: Spacing.xl,
+              borderTopLeftRadius: 32, borderTopRightRadius: 32,
+              paddingTop: Spacing.lg, paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -12 },
-              shadowOpacity: 0.03,
-              shadowRadius: 24,
-              elevation: 8,
+              shadowColor: "#000", shadowOffset: { width: 0, height: -12 },
+              shadowOpacity: 0.04, shadowRadius: 24, elevation: 8,
+              flex: 1,
             }}
           >
             <View style={{ width: 40, height: 4, backgroundColor: Colors.borderLightStrong, borderRadius: 2, alignSelf: "center", marginBottom: Spacing.lg }} />
-            
-            {!showEmailLogin && (
-              <Animated.View entering={FadeIn} exiting={FadeOut}>
-                <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
+
+            {error && (
+              <Animated.View entering={FadeInDown.duration(200)}>
+                <Text style={[Typography.bodySmall, { color: Colors.danger, marginBottom: Spacing.md, textAlign: "center" }]}>{error}</Text>
+              </Animated.View>
+            )}
+
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" style={{ flex: 1 }}>
+
+              {/* ── STEP: identifier ── */}
+              {step === "identifier" && (
+                <Animated.View entering={FadeIn.duration(250)}>
                   <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.xs }]}>
                     Welcome back 👋
                   </Text>
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
-                    Sign in to continue to your account
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>
+                    Enter your email, phone number, or username
                   </Text>
-                </View>
 
-                <SocialButton 
-                  icon="chrome" 
-                  label="Continue with Google" 
-                  isGoogle 
-                  onPress={async () => {
-                    setError(null);
-                    setIsLoading(true);
-                    try {
-                      // Trigger Google Sign-In
-                      // In a real device setup, this uses expo-auth-session.
-                      // For a smooth hackathon test experience without requiring client configuration:
-                      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                      
-                      const user = auth.currentUser;
-                      if (user) {
-                        const profile = await getUserProfile(user.uid);
-                        if (profile) {
-                          if (profile.hasPin) {
-                            router.replace("/(auth)/pin-entry");
-                          } else {
-                            router.replace("/(auth)/signup"); // Go to PIN setup
-                          }
-                        } else {
-                          router.replace("/(auth)/signup"); // Onboard new user
-                        }
-                      } else {
-                        // Demo fallback: if not authenticated yet, go to signup
-                        router.replace("/(auth)/signup");
-                      }
-                    } catch (err: any) {
-                      setError(err.message || "Google sign in failed");
-                    } finally {
-                      setIsLoading(false);
+                  <TextInput
+                    value={identifier}
+                    onChangeText={setIdentifier}
+                    placeholder="Email, phone, or username"
+                    placeholderTextColor={Colors.textLightMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="go"
+                    onSubmitEditing={handleResolve}
+                    style={{
+                      fontFamily: "Inter-Regular",
+                      fontSize: 16,
+                      backgroundColor: Colors.baseLight,
+                      borderWidth: 1.5,
+                      borderColor: Colors.borderLight,
+                      borderRadius: 16,
+                      height: 58,
+                      paddingHorizontal: Spacing.md,
+                      color: Colors.textLightPrimary,
+                      marginBottom: Spacing.lg,
+                    }}
+                  />
+
+                  <Pressable
+                    onPress={handleResolve}
+                    onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
+                    disabled={isLoading}
+                    style={({ pressed }) => ({
+                      height: 58, borderRadius: 18,
+                      justifyContent: "center", alignItems: "center",
+                      backgroundColor: "#000",
+                      opacity: isLoading || pressed ? 0.7 : 1,
+                      flexDirection: "row", gap: 10,
+                    })}
+                  >
+                    {isLoading
+                      ? <Text style={[Typography.labelLarge, { color: Colors.white }]}>Looking up…</Text>
+                      : <>
+                          <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>Continue</Text>
+                          <Feather name="arrow-right" size={18} color="#FFF" />
+                        </>
                     }
-                  }} 
-                />
-                
-                <SocialButton 
-                  icon="smartphone" 
-                  label="Continue with Phone Number" 
-                  onPress={() => {
-                    router.push("/(auth)/verify-phone");
-                  }} 
-                />
+                  </Pressable>
+                </Animated.View>
+              )}
 
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.md }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: Colors.borderLight }} />
-                  <Pressable onPress={() => setShowEmailLogin(true)}>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, paddingHorizontal: Spacing.md }]}>
-                      or sign in with email
+              {/* ── STEP: pin ── */}
+              {step === "pin" && (
+                <PinRow
+                  values={pin} refs={pinRefs}
+                  onChange={handlePinChange} onKeyPress={handlePinKeyPress}
+                  label="Enter your PIN 🔒"
+                  sublabel={`Signing in as ${resolvedEmail}`}
+                />
+              )}
+              {step === "pin" && (
+                <Animated.View entering={FadeIn.duration(300)}>
+                  <Pressable
+                    onPress={() => { setError(null); setStep("forgot_send"); }}
+                    style={{ alignSelf: "center", paddingVertical: Spacing.sm }}
+                  >
+                    <Text style={[Typography.bodyMedium, { color: Colors.primary, fontWeight: "600" }]}>
+                      Forgot PIN?
                     </Text>
                   </Pressable>
-                  <View style={{ flex: 1, height: 1, backgroundColor: Colors.borderLight }} />
-                </View>
-              </Animated.View>
-            )}
+                </Animated.View>
+              )}
 
-            {showEmailLogin && (
-              <Animated.View entering={FadeIn} exiting={FadeOut}>
-                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.xl }}>
-                  <Pressable onPress={() => setShowEmailLogin(false)} style={{ padding: Spacing.xs, marginRight: Spacing.sm }}>
-                    <Feather name="arrow-left" size={24} color={"#000"} />
-                  </Pressable>
-                  <View>
-                    <Text style={[Typography.headingMedium, { color: "#000", fontWeight: "700" }]}>Sign in</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 2 }]}>Use your email or username</Text>
-                  </View>
-                </View>
-
-                {error && (
-                  <Animated.View entering={FadeInDown.duration(200)}>
-                    <Text style={[Typography.bodySmall, { color: Colors.danger, marginBottom: Spacing.md, textAlign: "center" }]}>
-                      {error}
-                    </Text>
-                  </Animated.View>
-                )}
-
-                <View style={{ marginBottom: Spacing.md }}>
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    placeholder="Email or Username"
-                    placeholderTextColor={Colors.textLightMuted}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={{
-                      fontFamily: "Inter-Regular",
-                      fontSize: 16,
-                      backgroundColor: Colors.baseLight,
-                      borderWidth: 1,
-                      borderColor: Colors.borderLight,
-                      borderRadius: 16,
-                      height: 56,
-                      paddingHorizontal: Spacing.md,
-                      color: Colors.textLightPrimary,
-                    }}
-                  />
-                </View>
-
-                <View style={{ marginBottom: Spacing.lg }}>
-                  <TextInput
-                    value={password}
-                    onChangeText={setPassword}
-                    placeholder="Password"
-                    placeholderTextColor={Colors.textLightMuted}
-                    secureTextEntry
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    style={{
-                      fontFamily: "Inter-Regular",
-                      fontSize: 16,
-                      backgroundColor: Colors.baseLight,
-                      borderWidth: 1,
-                      borderColor: Colors.borderLight,
-                      borderRadius: 16,
-                      height: 56,
-                      paddingHorizontal: Spacing.md,
-                      color: Colors.textLightPrimary,
-                    }}
-                  />
-                </View>
-
-                <Pressable
-                  onPress={handleLogin}
-                  onPressIn={() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)}
-                  disabled={isLoading}
-                  style={{
-                    height: 56,
-                    borderRadius: 9999,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    backgroundColor: "#000",
-                    opacity: isLoading ? 0.6 : 1,
-                  }}
-                >
-                  <Text style={[Typography.labelLarge, { color: Colors.white }]}>
-                    {isLoading ? "Signing in..." : "Sign In"}
+              {/* ── STEP: forgot_send ── */}
+              {step === "forgot_send" && (
+                <Animated.View entering={FadeIn.duration(250)}>
+                  <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.xs }]}>
+                    Forgot PIN 🔑
                   </Text>
-                </Pressable>
-              </Animated.View>
-            )}
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>
+                    We'll send an 8-character reset code to{"\n"}
+                    <Text style={{ color: Colors.textLightPrimary, fontWeight: "600" }}>{resolvedEmail}</Text>
+                  </Text>
 
-            <Pressable
-              onPress={() => {
-                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                router.push("/(auth)/signup");
-              }}
-              style={{ marginTop: Spacing.lg, alignItems: "center" }}
-            >
-              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>
-                Don't have an account?{"  "}
-                <Text style={{ color: Colors.textLightPrimary, fontWeight: "700" }}>Sign up</Text>
-              </Text>
-            </Pressable>
+                  <Pressable
+                    onPress={handleForgotSend}
+                    disabled={isLoading}
+                    style={({ pressed }) => ({
+                      height: 58, borderRadius: 18,
+                      justifyContent: "center", alignItems: "center",
+                      backgroundColor: "#000",
+                      opacity: isLoading || pressed ? 0.7 : 1,
+                      flexDirection: "row", gap: 10,
+                    })}
+                  >
+                    {isLoading
+                      ? <Text style={[Typography.labelLarge, { color: Colors.white }]}>Sending…</Text>
+                      : <>
+                          <Feather name="mail" size={18} color="#FFF" />
+                          <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>Send Reset Code</Text>
+                        </>
+                    }
+                  </Pressable>
+                </Animated.View>
+              )}
 
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: Spacing.lg, paddingHorizontal: Spacing.md }}>
-              <Feather name="lock" size={14} color={Colors.textLightMuted} style={{ marginRight: Spacing.sm }} />
-              <Text style={[Typography.bodySmall, { color: Colors.textLightMuted, fontSize: 12 }]}>
-                Your funds are protected with bank-grade{"\n"}security and end-to-end encryption.
-              </Text>
-            </View>
+              {/* ── STEP: forgot_verify ── */}
+              {step === "forgot_verify" && (
+                <Animated.View entering={FadeIn.duration(250)}>
+                  <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.xs }]}>
+                    Check your email 📬
+                  </Text>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>
+                    Enter the 8-character code we sent to your email. It expires in 10 minutes.
+                  </Text>
 
+                  <TextInput
+                    value={forgotOtp}
+                    onChangeText={(t) => setForgotOtp(t.toUpperCase())}
+                    placeholder="e.g. AK3MPBNQ"
+                    placeholderTextColor={Colors.textLightMuted}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={8}
+                    returnKeyType="go"
+                    onSubmitEditing={handleForgotVerify}
+                    style={{
+                      fontFamily: "Inter-Regular",
+                      fontSize: 22,
+                      letterSpacing: 6,
+                      backgroundColor: Colors.baseLight,
+                      borderWidth: 1.5,
+                      borderColor: forgotOtp.length > 0 ? Colors.primary : Colors.borderLight,
+                      borderRadius: 16,
+                      height: 64,
+                      paddingHorizontal: Spacing.md,
+                      color: Colors.textLightPrimary,
+                      textAlign: "center",
+                      marginBottom: Spacing.lg,
+                    }}
+                  />
+
+                  <Pressable
+                    onPress={handleForgotVerify}
+                    disabled={isLoading}
+                    style={({ pressed }) => ({
+                      height: 58, borderRadius: 18,
+                      justifyContent: "center", alignItems: "center",
+                      backgroundColor: "#000",
+                      opacity: isLoading || pressed ? 0.7 : 1,
+                    })}
+                  >
+                    <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>
+                      {isLoading ? "Verifying…" : "Verify Code"}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={handleForgotSend}
+                    disabled={isLoading}
+                    style={{ alignSelf: "center", paddingVertical: Spacing.md }}
+                  >
+                    <Text style={[Typography.bodyMedium, { color: Colors.primary, fontWeight: "600" }]}>Resend code</Text>
+                  </Pressable>
+                </Animated.View>
+              )}
+
+              {/* ── STEP: forgot_newpin ── */}
+              {step === "forgot_newpin" && (
+                <PinRow
+                  values={newPin} refs={newPinRefs}
+                  onChange={handleNewPinChange} onKeyPress={handleNewPinKeyPress}
+                  label="Set a new PIN ✨"
+                  sublabel="Choose a new 6-digit security PIN for your account"
+                />
+              )}
+
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>

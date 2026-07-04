@@ -1,18 +1,32 @@
 import { Router } from "express";
-import { validateSession, resetPassword, sendEmailOtp, verifyEmailOtp } from "../controllers/authController";
+import {
+  validateSession, resetPassword,
+  sendEmailOtp, verifyEmailOtp,
+  resolveUser, resolveUserToken,
+  sendForgotPinOtp, verifyForgotPinOtp,
+} from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
 import { strictRateLimiter } from "../middlewares/rateLimiter";
 
 const router = Router();
 
-// Validate session using the token sent from FE
+// Validate session
 router.post("/validate-session", requireAuth, validateSession);
 
-// Request a password reset email
+// Password reset
 router.post("/reset-password", strictRateLimiter, resetPassword);
 
-// OTP routes
+// OTP (signup / verify)
 router.post("/send-otp", strictRateLimiter, sendEmailOtp);
 router.post("/verify-otp", strictRateLimiter, verifyEmailOtp);
+
+// Login: resolve identifier → email + uid
+router.post("/resolve-user", strictRateLimiter, resolveUser);
+// Login: mint a custom token by email (for PIN verification step)
+router.post("/resolve-user-token", strictRateLimiter, resolveUserToken);
+
+// Forgot PIN
+router.post("/forgot-pin/send", strictRateLimiter, sendForgotPinOtp);
+router.post("/forgot-pin/verify", strictRateLimiter, verifyForgotPinOtp);
 
 export default router;
