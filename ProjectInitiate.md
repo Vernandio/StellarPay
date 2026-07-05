@@ -1,5 +1,7 @@
 # StellarPay — Initial Project Setup Prompt
+
 # For: Antigravity / Claude Code Agent
+
 # Copy this entire file as your first message.
 
 ---
@@ -205,9 +207,6 @@ npx expo install react-native-safe-area-context react-native-screens
 # Camera + QR Scanner
 npx expo install expo-camera expo-barcode-scanner
 
-# Biometrics
-npx expo install expo-local-authentication
-
 # Haptics
 npx expo install expo-haptics
 
@@ -376,11 +375,9 @@ Update `app.json`:
       "expo-secure-store",
       [
         "expo-camera",
-        { "cameraPermission": "StellarPay uses your camera to scan QR payment codes." }
-      ],
-      [
-        "expo-local-authentication",
-        { "faceIDPermission": "StellarPay uses Face ID to protect your wallet." }
+        {
+          "cameraPermission": "StellarPay uses your camera to scan QR payment codes."
+        }
       ]
     ],
     "experiments": {
@@ -405,7 +402,12 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor="#0F0E23" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0F0E23" } }}>
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#0F0E23" },
+          }}
+        >
           <Stack.Screen name="(auth)" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen
@@ -630,7 +632,11 @@ import {
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db } from "./config";
 
-export const signUp = async (email: string, password: string, username: string) => {
+export const signUp = async (
+  email: string,
+  password: string,
+  username: string
+) => {
   const cred = await createUserWithEmailAndPassword(auth, email, password);
   // Create user profile in Firestore
   await setDoc(doc(db, "users", cred.user.uid), {
@@ -657,9 +663,19 @@ Create `src/services/firebase/firestore.ts`:
 
 ```ts
 import {
-  doc, getDoc, setDoc, updateDoc, collection,
-  query, where, getDocs, orderBy, limit,
-  onSnapshot, serverTimestamp, Timestamp,
+  doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+  limit,
+  onSnapshot,
+  serverTimestamp,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "./config";
 
@@ -677,13 +693,13 @@ export interface UserProfile {
 export interface WalletData {
   uid: string;
   stellarPublicKey: string;
-  xlmBalance: string;        // cached from Horizon, always re-fetch for accuracy
-  usdcBalance: string;       // cached
+  xlmBalance: string; // cached from Horizon, always re-fetch for accuracy
+  usdcBalance: string; // cached
   lastSyncedAt: Timestamp;
 }
 
 export interface TransactionCache {
-  id: string;                // Stellar transaction hash
+  id: string; // Stellar transaction hash
   uid: string;
   type: "send" | "receive" | "swap";
   amount: string;
@@ -697,13 +713,21 @@ export interface TransactionCache {
 
 // ── Collections ───────────────────────────────────────────────────────
 
-export const getUserProfile = async (uid: string): Promise<UserProfile | null> => {
+export const getUserProfile = async (
+  uid: string
+): Promise<UserProfile | null> => {
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? (snap.data() as UserProfile) : null;
 };
 
-export const getUserByUsername = async (username: string): Promise<UserProfile | null> => {
-  const q = query(collection(db, "users"), where("username", "==", username.toLowerCase()), limit(1));
+export const getUserByUsername = async (
+  username: string
+): Promise<UserProfile | null> => {
+  const q = query(
+    collection(db, "users"),
+    where("username", "==", username.toLowerCase()),
+    limit(1)
+  );
   const snap = await getDocs(q);
   return snap.empty ? null : (snap.docs[0].data() as UserProfile);
 };
@@ -714,7 +738,10 @@ export const getWallet = async (uid: string): Promise<WalletData | null> => {
 };
 
 export const updateWalletCache = (uid: string, data: Partial<WalletData>) =>
-  updateDoc(doc(db, "wallets", uid), { ...data, lastSyncedAt: serverTimestamp() });
+  updateDoc(doc(db, "wallets", uid), {
+    ...data,
+    lastSyncedAt: serverTimestamp(),
+  });
 
 export const subscribeToTransactions = (
   uid: string,
@@ -808,15 +835,19 @@ export const getUSDCBalance = async (publicKey: string): Promise<string> => {
   const balances = await getAccountBalances(publicKey);
   const usdc = balances.find(
     (b) =>
-      b.asset_type === "credit_alphanum4" &&
-      (b as any).asset_code === "USDC"
+      b.asset_type === "credit_alphanum4" && (b as any).asset_code === "USDC"
   );
   return usdc?.balance ?? "0";
 };
 
 export const getPaymentHistory = async (publicKey: string, limit = 20) => {
   const server = getHorizonServer();
-  return server.payments().forAccount(publicKey).limit(limit).order("desc").call();
+  return server
+    .payments()
+    .forAccount(publicKey)
+    .limit(limit)
+    .order("desc")
+    .call();
 };
 
 export const streamPayments = (
@@ -835,11 +866,22 @@ export const streamPayments = (
 Create `src/services/stellar/wallet.ts`:
 
 ```ts
-import { Keypair, TransactionBuilder, Operation, Networks, Asset, BASE_FEE } from "@stellar/stellar-sdk";
+import {
+  Keypair,
+  TransactionBuilder,
+  Operation,
+  Networks,
+  Asset,
+  BASE_FEE,
+} from "@stellar/stellar-sdk";
 import * as Crypto from "expo-crypto";
 import * as SecureStore from "expo-secure-store";
 import { getHorizonServer, loadAccount } from "./client";
-import { ACTIVE_NETWORK, USDC_ASSET, APP_MEMO_PREFIX } from "../../constants/stellar";
+import {
+  ACTIVE_NETWORK,
+  USDC_ASSET,
+  APP_MEMO_PREFIX,
+} from "../../constants/stellar";
 
 const KEYPAIR_STORE_KEY = (uid: string) => `stellarpay_keypair_${uid}`;
 
@@ -860,7 +902,9 @@ export const storeKeypairSecurely = async (uid: string, keypair: Keypair) => {
   );
 };
 
-export const loadKeypairFromSecureStore = async (uid: string): Promise<Keypair | null> => {
+export const loadKeypairFromSecureStore = async (
+  uid: string
+): Promise<Keypair | null> => {
   const secret = await SecureStore.getItemAsync(KEYPAIR_STORE_KEY(uid));
   return secret ? Keypair.fromSecret(secret) : null;
 };
@@ -877,7 +921,10 @@ export const createWallet = async (uid: string): Promise<string> => {
   return keypair.publicKey();
 };
 
-export const setupUSDCTrustline = async (uid: string, publicKey: string): Promise<string> => {
+export const setupUSDCTrustline = async (
+  uid: string,
+  publicKey: string
+): Promise<string> => {
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Keypair not found in secure store");
 
@@ -906,10 +953,19 @@ Create `src/services/stellar/payments.ts`:
 
 ```ts
 import {
-  TransactionBuilder, Operation, Asset, BASE_FEE, Memo, MemoText,
+  TransactionBuilder,
+  Operation,
+  Asset,
+  BASE_FEE,
+  Memo,
+  MemoText,
 } from "@stellar/stellar-sdk";
 import { getHorizonServer, loadAccount } from "./client";
-import { ACTIVE_NETWORK, USDC_ASSET, APP_MEMO_PREFIX } from "../../constants/stellar";
+import {
+  ACTIVE_NETWORK,
+  USDC_ASSET,
+  APP_MEMO_PREFIX,
+} from "../../constants/stellar";
 import { loadKeypairFromSecureStore } from "./wallet";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -1021,11 +1077,7 @@ export const findPaymentPaths = async (
 ) => {
   const server = getHorizonServer();
   return server
-    .strictReceivePaths(
-      sourcePublicKey,
-      getAsset(destAsset),
-      destAmount
-    )
+    .strictReceivePaths(sourcePublicKey, getAsset(destAsset), destAmount)
     .call();
 };
 ```
@@ -1172,7 +1224,12 @@ Create `src/services/stellar/soroban.ts`:
 // - https://developers.stellar.org/docs/build/guides/soroban-rpc
 // ─────────────────────────────────────────────────────────────────────
 
-import { SorobanRpc, Contract, TransactionBuilder, BASE_FEE } from "@stellar/stellar-sdk";
+import {
+  SorobanRpc,
+  Contract,
+  TransactionBuilder,
+  BASE_FEE,
+} from "@stellar/stellar-sdk";
 import { ACTIVE_NETWORK } from "../../constants/stellar";
 
 const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org";

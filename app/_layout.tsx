@@ -46,6 +46,8 @@ export default function RootLayout() {
             <Stack.Screen name="swap" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="split-bill" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="notifications" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="security" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="personal-information" options={{ animation: "slide_from_right" }} />
           </Stack>
         </SafeAreaProvider>
       </BottomSheetModalProvider>

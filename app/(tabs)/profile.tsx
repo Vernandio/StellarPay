@@ -28,12 +28,6 @@ export default function ProfileScreen() {
         
         {/* Dark Header */}
         <View style={{ backgroundColor: "#111111", paddingBottom: 60, paddingTop: 70, paddingHorizontal: Spacing.lg, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, alignItems: "center" }}>
-          <View style={{ width: "100%", alignItems: "flex-end", marginBottom: Spacing.md }}>
-            <Pressable>
-              <Feather name="settings" size={24} color={Colors.white} />
-            </Pressable>
-          </View>
-
           {/* Avatar */}
           <View style={{ marginBottom: Spacing.md }}>
             <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.surface, justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 3, borderColor: "rgba(255,255,255,0.1)" }}>
@@ -105,12 +99,19 @@ export default function ProfileScreen() {
           {/* Menu Block 1 */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 24, paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
             {[
-              { icon: "user", title: "Personal Information" },
-              { icon: "link-2", title: "Linked Accounts" },
-              { icon: "shield", title: "Security" },
-              { icon: "sliders", title: "Preferences" },
+              { icon: "user", title: "Personal Information", onPress: () => router.push("/personal-information") },
+              { icon: "link-2", title: "Linked Accounts", onPress: () => {} },
+              { icon: "shield", title: "Security", onPress: () => router.push("/security") },
+              { icon: "sliders", title: "Preferences", onPress: () => {} },
             ].map((item, idx) => (
-              <Pressable key={idx} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 3 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+              <Pressable
+                key={idx}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  item.onPress();
+                }}
+                style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 3 ? 0 : 1, borderBottomColor: Colors.borderLight }}
+              >
                 <Feather name={item.icon as any} size={22} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
                 <Text style={[Typography.labelLarge, { flex: 1, color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.title}</Text>
                 <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />

@@ -15,11 +15,7 @@
       }
     },
     "android": {
-      "permissions": [
-        "CAMERA",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT"
-      ],
+      "permissions": ["CAMERA", "USE_BIOMETRIC", "USE_FINGERPRINT"],
       "adaptiveIcon": {
         "backgroundColor": "#0F0E23",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -45,12 +41,6 @@
         "expo-camera",
         {
           "cameraPermission": "StellarPay uses your camera to scan QR payment codes."
-        }
-      ],
-      [
-        "expo-local-authentication",
-        {
-          "faceIDPermission": "StellarPay uses Face ID to protect your wallet."
         }
       ],
       "expo-barcode-scanner",

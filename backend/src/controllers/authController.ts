@@ -159,6 +159,46 @@ const createTransporter = () =>
     auth: { user: process.env.SMTP_EMAIL, pass: process.env.SMTP_PASSWORD },
   });
 
+// ── Check availability of email, username, phone before signup ────────
+export const checkAvailability = async (req: Request, res: Response) => {
+  try {
+    const { email, username, phone } = req.body;
+    const result: { email?: boolean; username?: boolean; phone?: boolean } = {};
+
+    if (email) {
+      try {
+        await adminAuth.getUserByEmail(email.trim().toLowerCase());
+        result.email = false; // found → taken
+      } catch (_) {
+        result.email = true; // not found → available
+      }
+    }
+
+    if (phone) {
+      try {
+        await adminAuth.getUserByPhoneNumber(phone.trim());
+        result.phone = false;
+      } catch (_) {
+        result.phone = true;
+      }
+    }
+
+    if (username) {
+      const snap = await adminFirestore
+        .collection("users")
+        .where("username", "==", username.trim().toLowerCase())
+        .limit(1)
+        .get();
+      result.username = snap.empty;
+    }
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("checkAvailability error:", error);
+    return res.status(500).json({ error: "Failed to check availability" });
+  }
+};
+
 // ── Resolve user by email, phone, or username ─────────────────────────
 export const resolveUser = async (req: Request, res: Response) => {
   try {

@@ -4,6 +4,7 @@ import {
   sendEmailOtp, verifyEmailOtp,
   resolveUser, resolveUserToken,
   sendForgotPinOtp, verifyForgotPinOtp,
+  checkAvailability,
 } from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
 import { strictRateLimiter } from "../middlewares/rateLimiter";
@@ -19,6 +20,9 @@ router.post("/reset-password", strictRateLimiter, resetPassword);
 // OTP (signup / verify)
 router.post("/send-otp", strictRateLimiter, sendEmailOtp);
 router.post("/verify-otp", strictRateLimiter, verifyEmailOtp);
+
+// Signup: check email/username/phone availability
+router.post("/check-availability", strictRateLimiter, checkAvailability);
 
 // Login: resolve identifier → email + uid
 router.post("/resolve-user", strictRateLimiter, resolveUser);

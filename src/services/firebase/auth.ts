@@ -93,13 +93,14 @@ export const signInWithEmailOtp = async (email: string, otp: string) => {
 export const createPhoneUserProfile = async (
   user: User,
   username: string,
-  email: string
+  email: string,
+  displayName: string
 ) => {
   await setDoc(doc(db, "users", user.uid), {
     uid: user.uid,
     email,
     username: username.toLowerCase(),
-    displayName: username,
+    displayName: displayName.trim() || username,
     phone: user.phoneNumber,
     stellarPublicKey: null,
     authProviders: user.providerData.map((p) => p.providerId),

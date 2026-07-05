@@ -13,6 +13,18 @@ export const resolveUser = async (identifier: string): Promise<{ email: string; 
 };
 
 /**
+ * Checks whether an email, username, and/or phone number are still available.
+ * Any omitted field is skipped (undefined in the response).
+ */
+export const checkAvailability = async (fields: {
+  email?: string;
+  username?: string;
+  phone?: string;
+}): Promise<{ email?: boolean; username?: boolean; phone?: boolean }> => {
+  return apiClient.post("/api/auth/check-availability", fields);
+};
+
+/**
  * Sends a forgot-PIN alphanumeric OTP to the user's email.
  */
 export const sendForgotPinOtp = async (email: string): Promise<void> => {

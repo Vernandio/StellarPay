@@ -98,7 +98,7 @@ export default function VerifyPhoneScreen() {
       });
       setOtp(newOtp);
       const nextIndex = Math.min(index + pastedData.length, 5);
-      otpRefs[nextIndex].current?.focus();
+      setTimeout(() => otpRefs[nextIndex].current?.focus(), 0);
       return;
     }
 
@@ -107,13 +107,16 @@ export default function VerifyPhoneScreen() {
     setOtp(newOtp);
 
     if (text && index < 5) {
-      otpRefs[index + 1].current?.focus();
+      setTimeout(() => otpRefs[index + 1].current?.focus(), 0);
     }
   };
 
   const handleOtpKeyPress = (e: any, index: number) => {
     if (e.nativeEvent.key === "Backspace" && !otp[index] && index > 0) {
-      otpRefs[index - 1].current?.focus();
+      const newOtp = [...otp];
+      newOtp[index - 1] = "";
+      setOtp(newOtp);
+      setTimeout(() => otpRefs[index - 1].current?.focus(), 0);
     }
   };
 
@@ -190,7 +193,7 @@ export default function VerifyPhoneScreen() {
               backgroundColor: Colors.white,
               borderTopLeftRadius: 32,
               borderTopRightRadius: 32,
-              paddingTop: Spacing.lg,
+              paddingTop: Spacing.xl,
               paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
               shadowColor: "#000",
@@ -202,8 +205,6 @@ export default function VerifyPhoneScreen() {
               flex: 1,
             }}
           >
-            <View style={{ width: 40, height: 4, backgroundColor: Colors.borderLightStrong, borderRadius: 2, alignSelf: "center", marginBottom: Spacing.lg }} />
-
             {error && (
               <Animated.View entering={FadeInDown.duration(200)}>
                 <Text style={[Typography.bodySmall, { color: Colors.danger, marginBottom: Spacing.md, textAlign: "center" }]}>
@@ -320,7 +321,7 @@ export default function VerifyPhoneScreen() {
                         onChangeText={(text) => handleOtpChange(text, index)}
                         onKeyPress={(e) => handleOtpKeyPress(e, index)}
                         keyboardType="number-pad"
-                        maxLength={6}
+                        maxLength={1}
                         style={{
                           fontSize: 28,
                           fontWeight: "700",
