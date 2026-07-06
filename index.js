@@ -11,13 +11,57 @@
 // 1. Crypto polyfill (must be first)
 require("react-native-get-random-values");
 
-// 2. Buffer polyfill
+// 2. TextEncoder/TextDecoder polyfill (required by @stellar/stellar-sdk for
+//    hashing the network passphrase during transaction signing on Hermes/iOS)
+require("text-encoding-polyfill");
+
+// 3. Buffer polyfill (always override — Hermes may expose a broken partial Buffer)
 var Buffer = require("buffer").Buffer;
-if (typeof global.Buffer === "undefined") {
-  global.Buffer = Buffer;
+global.Buffer = Buffer;
+
+// 4. Base64 polyfills — the XDR library uses atob/btoa for envelope serialisation.
+//    CRITICAL: Always override these because React Native's native atob/btoa
+//    fail on raw binary strings (they only support ASCII/UTF-8), corrupting the transaction XDR.
+const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+global.btoa = function (input) {
+  let str = String(input);
+  let output = '';
+  for (let block = 0, charCode, i = 0, map = chars;
+       str.charAt(i | 0) || (map = '=', i % 1);
+       output += map.charAt(63 & block >> 8 - i % 1 * 8)) {
+    charCode = str.charCodeAt(i += 3 / 4);
+    if (charCode > 0xFF) {
+      throw new Error("'btoa' failed: The string to be encoded contains characters outside of the Latin1 range.");
+    }
+    block = block << 8 | charCode;
+  }
+  return output;
+};
+global.atob = function (input) {
+  let str = String(input).replace(/[=]+$/, '');
+  let output = '';
+  if (str.length % 4 == 1) {
+    throw new Error("'atob' failed: The string to be decoded is not correctly encoded.");
+  }
+  for (let bc = 0, bs = 0, r_buffer, i = 0;
+       r_buffer = str.charAt(i++);
+       ~r_buffer && (bs = bc % 4 ? bs * 64 + r_buffer : r_buffer,
+         bc++ % 4) ? output += String.fromCharCode(255 & bs >> (-2 * bc & 6)) : 0) {
+    r_buffer = chars.indexOf(r_buffer);
+  }
+  return output;
+};
+
+// 5. AbortSignal.timeout polyfill (required by newer HTTP clients in Hermes/iOS)
+if (typeof AbortSignal !== "undefined" && typeof AbortSignal.timeout === "undefined") {
+  AbortSignal.timeout = function (ms) {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), ms);
+    return controller.signal;
+  };
 }
 
-// 3. DOM API polyfills required by the `eventsource` package (used by @stellar/stellar-sdk)
+// 6. DOM API polyfills required by the `eventsource` package (used by @stellar/stellar-sdk)
 //    React Native's Hermes engine does not provide EventTarget, Event, or MessageEvent.
 if (typeof global.EventTarget === "undefined") {
   function EventTarget() {
@@ -64,5 +108,5 @@ if (typeof global.MessageEvent === "undefined") {
   global.MessageEvent = MessageEvent;
 }
 
-// 4. Boot Expo Router (this triggers route scanning and module evaluation)
+// 7. Boot Expo Router (this triggers route scanning and module evaluation)
 require("expo-router/entry");

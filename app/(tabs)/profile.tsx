@@ -19,7 +19,7 @@ export default function ProfileScreen() {
   const handleSignOut = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await signOut();
-    router.replace("/(auth)/landing");
+    router.replace("/(auth)/login");
   };
 
   return (
@@ -99,9 +99,9 @@ export default function ProfileScreen() {
           {/* Menu Block 1 */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 24, paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
             {[
-              { icon: "user", title: "Personal Information", onPress: () => router.push("/personal-information") },
+              { icon: "user", title: "Personal Information", onPress: () => router.push("/personal-information" as any) },
               { icon: "link-2", title: "Linked Accounts", onPress: () => {} },
-              { icon: "shield", title: "Security", onPress: () => router.push("/security") },
+              { icon: "shield", title: "Security", onPress: () => router.push("/security" as any) },
               { icon: "sliders", title: "Preferences", onPress: () => {} },
             ].map((item, idx) => (
               <Pressable

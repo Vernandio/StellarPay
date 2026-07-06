@@ -16,9 +16,10 @@ export const STELLAR_NETWORK = {
 export const ACTIVE_NETWORK = STELLAR_NETWORK.TESTNET;
 
 // USDC on Stellar testnet (Circle issuer)
+// Note: Swapped to SRT for sandbox testing because testanchor has run out of USDC liquidity (0.09 USDC left)
 export const USDC_ASSET = {
-  code: "USDC",
-  issuer: "GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5",
+  code: "SRT",
+  issuer: "GCDNJUBQSX7AJWLJACMJ7I4BC3Z47BQUTMHEICZLE6MU4KQBRYG5JY6B",
 } as const;
 
 // Minimum XLM balance to keep in account (Stellar requires this)

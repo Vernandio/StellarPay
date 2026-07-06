@@ -361,7 +361,7 @@ export default function LoginScreen() {
                   } else
                     router.canGoBack()
                       ? router.back()
-                      : router.replace("/(auth)/landing");
+                      : router.replace("/(auth)/login");
                 }}
                 style={{ padding: Spacing.xs, marginRight: Spacing.md }}
               >

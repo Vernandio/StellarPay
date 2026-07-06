@@ -171,7 +171,7 @@ export default function VerifyPhoneScreen() {
           {/* Top Section */}
           <Animated.View entering={FadeInDown.duration(400).delay(100)} style={{ flex: 0.65, position: "relative" }}>
             <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xl, paddingTop: Spacing.xl, zIndex: 10 }}>
-              <Pressable onPress={() => step > 1 ? setStep(1) : router.canGoBack() ? router.back() : router.replace("/(auth)/landing")} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
+              <Pressable onPress={() => step > 1 ? setStep(1) : router.canGoBack() ? router.back() : router.replace("/(auth)/login")} style={{ padding: Spacing.xs, marginRight: Spacing.md }}>
                 <Feather name="arrow-left" size={24} color={Colors.white} />
               </Pressable>
               <Text style={{ fontSize: 20, fontWeight: "700", color: Colors.white }}>Verify Phone</Text>

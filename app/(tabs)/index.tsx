@@ -14,17 +14,20 @@ import { useAuth } from "../../src/hooks/useAuth";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
 import { CURRENCIES } from "../../src/constants/currencies";
-import { useState, useRef, useCallback, useMemo } from "react";
+import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
 
 const { width } = Dimensions.get("window");
 
 export default function WalletScreen() {
   const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, refreshBalances } = useWallet();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
   const { initializeWallet, isProcessing, error: stellarError } = useStellar();
   const [currency, setCurrency] = useState(CURRENCIES[0]);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
+  const [isAnchorModalVisible, setIsAnchorModalVisible] = useState(false);
+  const [anchorTxType, setAnchorTxType] = useState<"deposit" | "withdraw">("deposit");
   const currencySheetRef = useRef<BottomSheetModal>(null);
 
   const handleCurrencySelect = () => {
@@ -36,67 +39,57 @@ export default function WalletScreen() {
     []
   );
 
-  if (false) {
+  useEffect(() => {
+    const checkWalletKeypair = async () => {
+      if (!profile || !user || isProcessing) return;
+
+      // Case 1: User has no registered public key at all
+      if (!profile.stellarPublicKey) {
+        console.log("No Stellar Wallet found for logged-in user. Automatically creating wallet...");
+        await initializeWallet();
+        return;
+      }
+
+      // Case 2: User has a registered public key, verify keypair integrity
+      const { loadKeypairFromSecureStore } = require("../../src/services/stellar/wallet");
+      const keypair = await loadKeypairFromSecureStore(user.uid);
+      if (!keypair) {
+        console.warn("Stellar keypair is missing locally and cannot be restored from backup. Regenerating a fresh wallet...");
+        await initializeWallet();
+        return;
+      }
+
+      // Case 3: Keypair exists but its public key doesn't match the registered one
+      //         (this happens when a keypair was generated with a buggy Buffer/Hermes polyfill)
+      if (keypair.publicKey() !== profile.stellarPublicKey) {
+        console.warn(
+          `Keypair public key mismatch! Local: ${keypair.publicKey()}, Profile: ${profile.stellarPublicKey}. Regenerating...`
+        );
+        await initializeWallet();
+      }
+    };
+
+    checkWalletKeypair().catch((err) => {
+      console.error("Wallet keypair validation failed:", err);
+    });
+  }, [profile, isProcessing]);
+
+  if (isProcessing || (profile && !profile.stellarPublicKey)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.base }} edges={["top", "bottom"]}>
-        <View style={{ flex: 1, justifyContent: "center", paddingHorizontal: Spacing.lg }}>
-          <Animated.View entering={FadeInDown.duration(300).springify()}>
-            <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
-              <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: Colors.primaryGlow, justifyContent: "center", alignItems: "center", marginBottom: Spacing.md }}>
-                <Feather name="credit-card" size={32} color={Colors.primary} />
-              </View>
-              <Text style={[Typography.headingLarge, { color: Colors.textPrimary, textAlign: "center", marginBottom: Spacing.sm }]}>
-                Activate Your Stellar Wallet
-              </Text>
-              <Text style={[Typography.bodyLarge, { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: Spacing.md }]}>
-                To start sending and receiving payments at the speed of light, initialize your gasless Stellar wallet.
-              </Text>
-            </View>
-            <View style={{ backgroundColor: Colors.surface, borderRadius: 16, borderWidth: 0.5, borderColor: Colors.border, padding: Spacing.md, marginBottom: Spacing.xl }}>
-              {[
-                { icon: "zap" as const, title: "Gasless Transactions", desc: "Protocol 13 fee-bumps sponsor network gas fees." },
-                { icon: "refresh-cw" as const, title: "Programmatic Swapping", desc: "USDC automatically swaps to settle in local stablecoins." },
-                { icon: "gift" as const, title: "Free Hackathon Assets", desc: "Immediately funded with 10,000 Testnet XLM to try transfers." },
-              ].map((item, idx) => (
-                <View key={idx} style={{ flexDirection: "row", alignItems: "flex-start", marginBottom: idx === 2 ? 0 : Spacing.md }}>
-                  <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: Colors.surface2, justifyContent: "center", alignItems: "center", marginRight: Spacing.md, marginTop: 2 }}>
-                    <Feather name={item.icon} size={16} color={Colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.bodyMedium, { color: Colors.textPrimary, fontWeight: "600", marginBottom: 2 }]}>{item.title}</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textMuted }]}>{item.desc}</Text>
-                  </View>
-                </View>
-              ))}
-            </View>
-            {stellarError && (
-              <Text style={[Typography.bodySmall, { color: Colors.danger, textAlign: "center", marginBottom: Spacing.md }]}>{stellarError}</Text>
-            )}
-            <Pressable
-              onPress={async () => {
-                await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-                await initializeWallet();
-              }}
-              disabled={isProcessing}
-              style={{
-                height: 56, borderRadius: 9999, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", flexDirection: "row",
-                shadowColor: Colors.primary, shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 4,
-                opacity: isProcessing ? 0.7 : 1,
-              }}
-            >
-              {isProcessing ? (
-                <>
-                  <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: Spacing.sm }} />
-                  <Text style={[Typography.labelLarge, { color: Colors.white }]}>Initializing Wallet...</Text>
-                </>
-              ) : (
-                <>
-                  <Text style={[Typography.labelLarge, { color: Colors.white }]}>Activate Wallet</Text>
-                  <Feather name="arrow-right" size={16} color={Colors.white} style={{ marginLeft: Spacing.sm }} />
-                </>
-              )}
-            </Pressable>
-          </Animated.View>
+        <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.xl }}>
+          <ActivityIndicator size="large" color={Colors.primary} style={{ marginBottom: Spacing.lg }} />
+          <Text style={[Typography.headingLarge, { color: Colors.textPrimary, textAlign: "center", marginBottom: Spacing.sm }]}>
+            Initializing Stellar Wallet...
+          </Text>
+          <Text style={[Typography.bodyLarge, { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: Spacing.md }]}>
+            Creating your gasless Stellar wallet and funding it with 10,000 Testnet XLM.
+          </Text>
+          {stellarError && (
+            <Text style={[Typography.bodySmall, { color: Colors.danger, marginTop: Spacing.md, textAlign: "center" }]}>
+              {stellarError}
+            </Text>
+          )}
         </View>
       </SafeAreaView>
     );
@@ -182,8 +175,16 @@ export default function WalletScreen() {
                   <Pressable 
                     key={i} 
                     style={{ alignItems: "center" }}
-                    onPress={() => {
-                      if (action.route) {
+                    onPress={async () => {
+                      if (action.label === "Add Money") {
+                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setAnchorTxType("deposit");
+                        setIsAnchorModalVisible(true);
+                      } else if (action.label === "Withdraw") {
+                        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                        setAnchorTxType("withdraw");
+                        setIsAnchorModalVisible(true);
+                      } else if (action.route) {
                         router.push(action.route as any);
                       }
                     }}
@@ -326,6 +327,12 @@ export default function WalletScreen() {
           ))}
         </BottomSheetView>
       </BottomSheetModal>
+      <InteractiveAnchorModal
+        visible={isAnchorModalVisible}
+        onClose={() => setIsAnchorModalVisible(false)}
+        transactionType={anchorTxType}
+        onSuccess={refreshBalances}
+      />
     </View>
   );
 }

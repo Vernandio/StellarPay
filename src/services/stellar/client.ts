@@ -1,5 +1,5 @@
 import { Horizon } from "@stellar/stellar-sdk";
-import { ACTIVE_NETWORK } from "../../constants/stellar";
+import { ACTIVE_NETWORK, USDC_ASSET } from "../../constants/stellar";
 
 // Singleton Horizon server instance
 let _server: Horizon.Server | null = null;
@@ -32,7 +32,7 @@ export const getUSDCBalance = async (publicKey: string): Promise<string> => {
   const usdc = balances.find(
     (b) =>
       b.asset_type === "credit_alphanum4" &&
-      (b as any).asset_code === "USDC"
+      (b as any).asset_code === USDC_ASSET.code
   );
   return usdc?.balance ?? "0";
 };
