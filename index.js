@@ -114,8 +114,10 @@ if (typeof global.MessageEvent === "undefined") {
 // 8. Patch fetch to stringify URLSearchParams (feaxios bug in React Native)
 const originalFetch = global.fetch;
 global.fetch = function(url, options) {
-  if (options && options.body && typeof options.body === 'object' && options.body instanceof URLSearchParams) {
-    options.body = options.body.toString();
+  if (options && options.body && typeof options.body === 'object') {
+    if (options.body.constructor && options.body.constructor.name === 'URLSearchParams') {
+      options.body = options.body.toString();
+    }
   }
   return originalFetch(url, options);
 };

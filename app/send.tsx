@@ -6,35 +6,71 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { ActivityIndicator, Alert } from "react-native";
+import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
-import { CURRENCIES } from "../src/constants/currencies";
+import { CURRENCIES, Currency } from "../src/constants/currencies";
 import { useStellar } from "../src/hooks/useStellar";
+import { useAuthStore } from "../src/store/authStore";
+import {
+  fetchExchangeRates,
+  convertUSDTo,
+  formatRateDisplay,
+  ExchangeRates,
+} from "../src/services/exchangeRates";
+import { saveTransaction } from "../src/services/firebase/transactions";
+import { createNotification } from "../src/services/firebase/notifications";
+import { getUserByUsername } from "../src/services/firebase/firestore";
+import { updatePaymentRequest } from "../src/services/firebase/requests";
+import { PinVerifySheet, PinVerifySheetRef } from "../src/components/PinVerifySheet";
 
 const { height } = Dimensions.get("window");
 
 export default function SendScreen() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  
-  const [amount, setAmount] = useState("");
-  const [message, setMessage] = useState("");
-  const [currency, setCurrency] = useState(CURRENCIES[0]);
-  const [receiveCurrency, setReceiveCurrency] = useState(CURRENCIES[1] || CURRENCIES[0]);
-  const [activeSelector, setActiveSelector] = useState<"send" | "receive">("send");
-  
+  const { profile } = useAuthStore();
+
+  const [amount, setAmount] = useState((params.amount as string) || "");
+  const [message, setMessage] = useState((params.memo as string) || "");
+  const [receiveCurrency, setReceiveCurrency] = useState<Currency>(
+    params.currencyCode
+      ? CURRENCIES.find((c) => c.code === params.currencyCode) || CURRENCIES[0]
+      : CURRENCIES[0]
+  );
+  const [rates, setRates] = useState<ExchangeRates | null>(null);
+  const [ratesLoading, setRatesLoading] = useState(true);
+
   const { send, isProcessing } = useStellar();
-  
+
   const amountInputRef = useRef<TextInput>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
+  const pinSheetRef = useRef<PinVerifySheetRef>(null);
+
+  // Fetch exchange rates on mount
+  useEffect(() => {
+    const loadRates = async () => {
+      try {
+        const fetchedRates = await fetchExchangeRates();
+        setRates(fetchedRates);
+      } catch (err) {
+        console.warn("Failed to load rates:", err);
+      } finally {
+        setRatesLoading(false);
+      }
+    };
+    loadRates();
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      amountInputRef.current?.focus();
+      if (!params.amount) {
+        amountInputRef.current?.focus();
+      }
     }, 400);
     return () => clearTimeout(timer);
-  }, []);
+  }, [params.amount]);
 
   const handleAmountChange = (text: string) => {
     const cleaned = text.replace(/[^0-9.]/g, "");
@@ -42,38 +78,124 @@ export default function SendScreen() {
     setAmount(cleaned);
   };
 
-  const handleSend = async () => {
+  /** Computed converted amount for display */
+  const convertedAmount = (() => {
+    if (!amount || !rates || parseFloat(amount) <= 0) return "0.00";
+    const usdVal = parseFloat(amount);
+    return convertUSDTo(usdVal, receiveCurrency.code as keyof ExchangeRates, rates);
+  })();
+
+  /** Rate display text */
+  const rateText = rates
+    ? formatRateDisplay(receiveCurrency.code as keyof ExchangeRates, rates)
+    : "";
+
+  const executeSend = async () => {
     if (!amount || parseFloat(amount) <= 0) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    
+
     if (!params.publicKey) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Error", "Recipient has not set up a Stellar wallet yet.");
+      Alert.alert("Error", "Recipient has not set up a wallet yet.");
       return;
     }
-    
+
     try {
-      // Assuming currency.code can be mapped, or default to USDC
-      const asset = currency.code === "USDC" ? "USDC" : "XLM"; 
-      
-      const txHash = await send(params.publicKey as string, amount, asset, message);
-      
+      // Always send USD amount on-chain
+      const usdAmount = parseFloat(amount).toFixed(7);
+
+      const txHash = await send(
+        params.publicKey as string,
+        usdAmount,
+        "USDC",
+        message
+      );
+
+      // Save transaction record to Firestore
+      try {
+        const targetUid = (params.uid || params.id) as string;
+        const recipientUsername = (params.handle as string)?.replace('@', '') || '';
+        const receiverProfile = targetUid
+          ? null // We already have the info from params
+          : await getUserByUsername(recipientUsername);
+
+        const receiverUid = targetUid || receiverProfile?.uid || "";
+        const receiverUsername = recipientUsername || receiverProfile?.username || "";
+
+        await saveTransaction({
+          hash: txHash,
+          senderUid: profile?.uid || "",
+          senderUsername: profile?.username || "",
+          receiverUid,
+          receiverUsername,
+          amountUSD: usdAmount,
+          displayCurrency: receiveCurrency.code,
+          displayAmount: convertedAmount,
+          memo: message,
+          status: "completed",
+        });
+
+        // If this payment was initiated from a request, update the request status
+        if (params.requestId) {
+          await updatePaymentRequest(params.requestId as string, {
+            status: "paid",
+            txHash,
+          });
+
+          // Notify requester
+          await createNotification({
+            uid: receiverUid,
+            title: "Request Paid",
+            message: `${profile?.displayName || profile?.username} paid your request of $${parseFloat(usdAmount).toFixed(2)} USD`,
+            type: "request_paid",
+            referenceId: params.requestId as string,
+          });
+        } else {
+          // Standard peer transfer - create standard payment notification for recipient
+          await createNotification({
+            uid: receiverUid,
+            title: "Payment Received",
+            message: `${profile?.displayName || profile?.username} sent you $${parseFloat(usdAmount).toFixed(2)} USD`,
+            type: "payment_received",
+            referenceId: txHash,
+          });
+        }
+      } catch (firestoreErr) {
+        // Don't block the success flow if Firestore write fails
+        console.warn("Firestore write failed (non-blocking):", firestoreErr);
+      }
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace({
         pathname: "/transfer-success",
         params: {
-          amount,
-          currency: currency.code,
+          amount: usdAmount,
+          currency: "USD",
+          displayCurrency: receiveCurrency.code,
+          displayAmount: convertedAmount,
           name: params.name,
-          hash: txHash
-        }
+          hash: txHash,
+        },
       });
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Transfer Failed", err.message || "Something went wrong.");
     }
+  };
+
+  const handleSend = () => {
+    if (!amount || parseFloat(amount) <= 0) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    // Dismiss keyboard and remove focus from text inputs
+    Keyboard.dismiss();
+    amountInputRef.current?.blur();
+    
+    // Open PIN sheet before executing
+    pinSheetRef.current?.present();
   };
 
   const renderBackdrop = useCallback(
@@ -84,20 +206,20 @@ export default function SendScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8F9FA" }}>
+    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          
+
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, height: 56 }}>
-            <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" }}>
+            <TouchableOpacity onPress={() => router.back()} style={{ width: 44, height: 44, justifyContent: "center", alignItems: "flex-start" }}>
               <Feather name="chevron-left" size={28} color={Colors.textLightPrimary} />
             </TouchableOpacity>
             <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 18 }]}>Send Money</Text>
-            <View style={{ width: 40 }} />
+            <View style={{ width: 44 }} />
           </View>
 
-          <ScrollView 
+          <ScrollView
             contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
@@ -118,8 +240,8 @@ export default function SendScreen() {
 
             {/* Main Form Card */}
             <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
-              
-              {/* You Send */}
+
+              {/* You Send (USD only) */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>You send</Text>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.lg }}>
                 <TextInput
@@ -132,37 +254,51 @@ export default function SendScreen() {
                   style={[Typography.displayLarge, { fontSize: 40, lineHeight: 48, color: Colors.textLightPrimary, flex: 1, height: 56 }]}
                   selectionColor={Colors.teal}
                 />
-                <TouchableOpacity 
-                  onPress={() => {
-                    Keyboard.dismiss();
-                    setActiveSelector("send");
-                    currencySheetRef.current?.present();
-                  }}
-                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F4F7", paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 99, marginLeft: Spacing.sm }}
-                >
-                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>{currency.code}</Text>
-                  <Feather name="chevron-down" size={16} color={Colors.textLightPrimary} />
-                </TouchableOpacity>
+                {/* USD is fixed — no selector */}
+                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: 99, marginLeft: Spacing.sm }}>
+                  <Text style={{ fontSize: 16, marginRight: Spacing.xs }}>🇺🇸</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>USD</Text>
+                </View>
               </View>
 
               <View style={{ height: 1, backgroundColor: Colors.borderLight, marginBottom: Spacing.lg }} />
 
-              {/* They Receive */}
+              {/* They Receive (selectable currency) */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>They will receive</Text>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
-                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>{amount ? parseFloat(amount).toFixed(2) : "0.00"}</Text>
-                <TouchableOpacity 
+                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>
+                  {receiveCurrency.code === "USD"
+                    ? (amount ? parseFloat(amount).toFixed(2) : "0.00")
+                    : convertedAmount}
+                </Text>
+                <TouchableOpacity
                   onPress={() => {
                     Keyboard.dismiss();
-                    setActiveSelector("receive");
                     currencySheetRef.current?.present();
                   }}
-                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F4F7", paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 99, marginLeft: Spacing.sm }}
+                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: 99, marginLeft: Spacing.sm, minHeight: 44 }}
                 >
-                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>{receiveCurrency.code}</Text>
+                  <Text style={{ fontSize: 16, marginRight: Spacing.xs }}>{receiveCurrency.flag}</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: Spacing.xs }]}>{receiveCurrency.code}</Text>
                   <Feather name="chevron-down" size={16} color={Colors.textLightPrimary} />
                 </TouchableOpacity>
               </View>
+
+              {/* Exchange Rate Info */}
+              {receiveCurrency.code !== "USD" && rateText ? (
+                <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: Spacing.lg }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, padding: Spacing.md, borderRadius: 12, marginTop: Spacing.sm }}>
+                    <Feather name="trending-up" size={16} color={Colors.teal} style={{ marginRight: Spacing.sm }} />
+                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, flex: 1 }]}>
+                      {rateText}
+                    </Text>
+                    {ratesLoading && <ActivityIndicator size="small" color={Colors.textLightSecondary} />}
+                  </View>
+                </Animated.View>
+              ) : (
+                <View style={{ marginBottom: Spacing.lg }} />
+              )}
+
               <View style={{ height: 1, backgroundColor: Colors.borderLight, marginBottom: Spacing.lg }} />
 
               {/* Message */}
@@ -184,11 +320,11 @@ export default function SendScreen() {
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: "#F8F9FA" }}>
+          <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: Colors.baseLight }}>
             <TouchableOpacity
               onPress={handleSend}
               style={{
-                backgroundColor: "#111111",
+                backgroundColor: Colors.textLightPrimary,
                 borderRadius: 24,
                 paddingVertical: 18,
                 alignItems: "center",
@@ -215,33 +351,46 @@ export default function SendScreen() {
         handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
       >
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
-          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Select Currency</Text>
+          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Recipient Currency</Text>
+          <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: Spacing.lg, marginTop: -Spacing.sm }]}>
+            Select how the recipient sees the amount
+          </Text>
           {CURRENCIES.map((c) => (
             <TouchableOpacity
               key={c.code}
               onPress={() => {
-                if (activeSelector === "send") {
-                  setCurrency(c);
-                } else {
-                  setReceiveCurrency(c);
-                }
+                setReceiveCurrency(c);
                 Haptics.selectionAsync();
                 currencySheetRef.current?.dismiss();
               }}
-              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight }}
+              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight, minHeight: 56 }}
               activeOpacity={0.7}
             >
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>{c.symbol}</Text>
+                <Text style={{ fontSize: 20 }}>{c.flag}</Text>
               </View>
-              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, flex: 1 }]}>{c.code}</Text>
-              {((activeSelector === "send" && currency.code === c.code) || (activeSelector === "receive" && receiveCurrency.code === c.code)) && (
-                <Feather name="check" size={24} color={"#111111"} />
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{c.code}</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{c.name}</Text>
+              </View>
+              {rates && c.code !== "USD" && (
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginRight: Spacing.sm }]}>
+                  {new Intl.NumberFormat("en-US", {
+                    minimumFractionDigits: (rates[c.code as keyof ExchangeRates] || 0) < 10 ? 4 : 0,
+                    maximumFractionDigits: (rates[c.code as keyof ExchangeRates] || 0) < 10 ? 4 : 0,
+                  }).format(rates[c.code as keyof ExchangeRates] || 0)}
+                </Text>
+              )}
+              {receiveCurrency.code === c.code && (
+                <Feather name="check" size={24} color={Colors.teal} />
               )}
             </TouchableOpacity>
           ))}
         </BottomSheetView>
       </BottomSheetModal>
+
+      {/* PIN Verification Sheet */}
+      <PinVerifySheet ref={pinSheetRef} onSuccess={executeSend} />
     </View>
   );
 }

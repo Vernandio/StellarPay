@@ -91,11 +91,28 @@ export const createWallet = async (uid: string): Promise<string> => {
   return keypair.publicKey();
 };
 
+const submitTxToHorizon = async (tx: any): Promise<string> => {
+  const xdrBytes: Uint8Array = tx.toEnvelope().toXDR();
+  const xdrBase64 = Buffer.from(xdrBytes).toString("base64");
+
+  const response = await fetch(`${ACTIVE_NETWORK.horizonUrl}/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `tx=${encodeURIComponent(xdrBase64)}`,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    console.error("Horizon Trustline Submission Failed:", JSON.stringify(data));
+    throw new Error(data?.detail || "Horizon transaction submission failed");
+  }
+  return data.hash;
+};
+
 export const setupUSDCTrustline = async (uid: string, publicKey: string): Promise<string> => {
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Keypair not found in secure store");
 
-  const server = getHorizonServer();
   const account = await loadAccount(publicKey);
 
   const tx = new TransactionBuilder(account, {
@@ -111,8 +128,8 @@ export const setupUSDCTrustline = async (uid: string, publicKey: string): Promis
     .build();
 
   tx.sign(keypair);
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+  const hash = await submitTxToHorizon(tx);
+  return hash;
 };
 
 export const checkUSDCTrustlineExists = async (publicKey: string): Promise<boolean> => {

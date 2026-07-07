@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { getPaymentHistory } from "../services/stellar/client";
 import { useWalletStore } from "../store/walletStore";
+import { useAuthStore } from "../store/authStore";
+import { getRecentTransactions, TransactionRecord } from "../services/firebase/transactions";
 import { USDC_ASSET } from "../constants/stellar";
 
 export type ActivityType = "sent" | "received" | "swap";
@@ -20,6 +22,7 @@ export interface Activity {
 
 export const useTransactions = () => {
   const { publicKey } = useWalletStore();
+  const { user } = useAuthStore();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -27,8 +30,25 @@ export const useTransactions = () => {
     if (!publicKey) return;
     setIsLoading(true);
     try {
+      // 1. Load blockchain history
       const response = await getPaymentHistory(publicKey, 50);
       const records = response.records;
+
+      // 2. Load Firestore P2P transaction mappings for display names
+      let firestoreTxs: TransactionRecord[] = [];
+      if (user?.uid) {
+        try {
+          firestoreTxs = await getRecentTransactions(user.uid);
+        } catch (fErr) {
+          console.warn("Failed to load transactions from Firestore in hook:", fErr);
+        }
+      }
+
+      // Map tx hash to firestore records
+      const firestoreMap = new Map<string, TransactionRecord>();
+      firestoreTxs.forEach((tx) => {
+        if (tx.hash) firestoreMap.set(tx.hash, tx);
+      });
 
       const parsed: Activity[] = records
         .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive")
@@ -38,18 +58,15 @@ export const useTransactions = () => {
           
           let type: ActivityType = "sent";
           let isPositive = false;
-          let title = "Sent payment";
           let icon = "arrow-up-right";
           
           if (isSender && isReceiver) {
             type = "swap";
             isPositive = true;
-            title = "Swap";
             icon = "refresh-cw";
           } else if (isReceiver) {
             type = "received";
             isPositive = true;
-            title = "Received payment";
             icon = "arrow-down-left";
           }
 
@@ -75,19 +92,65 @@ export const useTransactions = () => {
           const prefix = isPositive ? "+" : "-";
           const amountPrimary = `${prefix} ${amountFormatted} ${assetCode}`;
 
-          // Basic extra info for demo if needed
+          // Check if we have beautiful P2P names from Firestore
+          const dbRecord = firestoreMap.get(record.transaction_hash);
+          let title = "";
+          let amountSecondary: string | undefined;
+
+          if (dbRecord) {
+            if (isSender && !isReceiver) {
+              title = dbRecord.receiverDisplayName || `@${dbRecord.receiverUsername}`;
+            } else if (isReceiver && !isSender) {
+              title = dbRecord.senderDisplayName || `@${dbRecord.senderUsername}`;
+            } else {
+              title = "Swap";
+            }
+
+            // Display localized currency conversions if not USD
+            if (dbRecord.displayCurrency && dbRecord.displayCurrency !== "USD") {
+              const formattedLocal = parseFloat(dbRecord.displayAmount).toLocaleString(undefined, {
+                minimumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
+                maximumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
+              });
+              amountSecondary = `${prefix} ${dbRecord.displayCurrency} ${formattedLocal}`;
+            } else {
+              amountSecondary = `${prefix} $${parseFloat(dbRecord.amountUSD).toFixed(2)}`;
+            }
+          } else {
+            // Fallback for anchor deposits/withdrawals and direct Horizon transfers
+            if (isSender && isReceiver) {
+              title = "Swap Asset";
+            } else if (isReceiver) {
+              // Check if from anchor/issuer
+              if (record.from === USDC_ASSET.issuer) {
+                title = "Funds Deposited";
+              } else {
+                title = `From ${record.from.substring(0, 4)}...${record.from.substring(52)}`;
+              }
+            } else {
+              if (record.to === USDC_ASSET.issuer) {
+                title = "Funds Withdrawn";
+              } else {
+                title = `To ${record.to.substring(0, 4)}...${record.to.substring(52)}`;
+              }
+            }
+          }
+
           let extra = record.transaction_hash.substring(0, 8);
 
           return {
             id: record.id,
             type,
-            title: isSender && !isReceiver ? `To ${record.to.substring(0, 4)}...${record.to.substring(52)}` : isReceiver && !isSender ? `From ${record.from.substring(0, 4)}...${record.from.substring(52)}` : "Swap",
+            title,
             time,
             amountPrimary,
+            amountSecondary,
             icon,
             isPositive,
             dateSection,
             extra,
+            hash: record.transaction_hash,
+            memo: dbRecord ? dbRecord.memo : "",
           };
         });
 
@@ -97,7 +160,7 @@ export const useTransactions = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [publicKey]);
+  }, [publicKey, user?.uid]);
 
   useEffect(() => {
     fetchTransactions();

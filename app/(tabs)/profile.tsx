@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Image } from "react-native";
+import { View, Text, ScrollView, Pressable, Image, TouchableOpacity } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -11,16 +11,27 @@ import { useAuth } from "../../src/hooks/useAuth";
 import { useWallet } from "../../src/hooks/useWallet";
 import { truncateAddress } from "../../src/utils/format";
 import { signOut } from "../../src/services/firebase/auth";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { useState, useRef, useCallback } from "react";
+import { CURRENCIES, getCurrencyByCode } from "../../src/constants/currencies";
 
 export default function ProfileScreen() {
   const { profile } = useAuth();
-  const { publicKey } = useWallet();
+  const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
+  const currencySheetRef = useRef<BottomSheetModal>(null);
 
   const handleSignOut = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await signOut();
     router.replace("/(auth)/login");
   };
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
+    ),
+    []
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
@@ -99,10 +110,10 @@ export default function ProfileScreen() {
           {/* Menu Block 1 */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 24, paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
             {[
-              { icon: "user", title: "Personal Information", onPress: () => router.push("/personal-information" as any) },
-              { icon: "link-2", title: "Linked Accounts", onPress: () => {} },
-              { icon: "shield", title: "Security", onPress: () => router.push("/security" as any) },
-              { icon: "sliders", title: "Preferences", onPress: () => {} },
+              { icon: "user", title: "Personal Information", value: "", onPress: () => router.push("/personal-information" as any) },
+              { icon: "link-2", title: "Linked Accounts", value: "", onPress: () => {} },
+              { icon: "shield", title: "Security", value: "", onPress: () => router.push("/security" as any) },
+              { icon: "sliders", title: "Preferences", value: displayCurrencyCode, onPress: () => currencySheetRef.current?.present() },
             ].map((item, idx) => (
               <Pressable
                 key={idx}
@@ -114,6 +125,9 @@ export default function ProfileScreen() {
               >
                 <Feather name={item.icon as any} size={22} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
                 <Text style={[Typography.labelLarge, { flex: 1, color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.title}</Text>
+                {item.value ? (
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginRight: Spacing.xs }]}>{item.value}</Text>
+                ) : null}
                 <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
               </Pressable>
             ))}
@@ -144,6 +158,40 @@ export default function ProfileScreen() {
 
         </View>
       </ScrollView>
+
+      <BottomSheetModal
+        ref={currencySheetRef}
+        enableDynamicSizing={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
+      >
+        <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Select Display Currency</Text>
+          {CURRENCIES.map((c) => (
+            <TouchableOpacity
+              key={c.code}
+              onPress={() => {
+                setDisplayCurrencyCode(c.code);
+                Haptics.selectionAsync();
+                currencySheetRef.current?.dismiss();
+              }}
+              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight, minHeight: 56 }}
+              activeOpacity={0.7}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                <Text style={{ fontSize: 20 }}>{c.flag}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{c.code}</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{c.name}</Text>
+              </View>
+              {displayCurrencyCode === c.code && <Feather name="check" size={24} color={Colors.teal} />}
+            </TouchableOpacity>
+          ))}
+        </BottomSheetView>
+      </BottomSheetModal>
     </View>
   );
 }

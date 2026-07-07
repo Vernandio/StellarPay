@@ -20,3 +20,10 @@
 - Preserve all existing comments and docstrings unrelated to your code changes.
 - All colors must come from `src/constants/colors.ts`, never hardcoded.
 - All spacing must come from `src/constants/spacing.ts`, never arbitrary pixel values.
+
+## Stellar React Native (Hermes Engine) Pitfalls & Rules
+- **Never use `server.submitTransaction(tx)`**: The Stellar JS SDK's default submit method relies on prototype base64 encoding of `Uint8Array`, which is corrupted under React Native's Hermes engine. Instead, always wrap raw transaction bytes using `Buffer.from(tx.toEnvelope().toXDR()).toString("base64")` and send it via raw `fetch` as `tx=${encodeURIComponent(xdrBase64)}` with `Content-Type: application/x-www-form-urlencoded`.
+- **Do not pass raw `URLSearchParams` to `fetch`**: React Native's fetch does not support native `URLSearchParams` objects, causing empty request payloads (resulting in `400 Bad Request` from endpoints like SEP-24). In our code, we explicitly patch `global.fetch` in `index.js` to intercept and stringify `URLSearchParams` strictly by constructor name (`options.body.constructor.name === 'URLSearchParams'`).
+- **Preserve FormData in the fetch interceptor**: Never use broad duck-typing checks (e.g. checking for `.append` and `.toString`) in the `fetch` override because it will match `FormData` (multipart uploads), corrupting image uploads and form submissions into `"[object FormData]"` strings.
+- **Dynamic Localhost Resolution**: When referencing backend endpoints on mobile, always import `API_BASE` from `src/services/api/client.ts` rather than hardcoding `localhost`. `client.ts` automatically extracts the host computer's IP via Expo Constants (`hostUri`), allowing test devices and emulators to successfully communicate with the local server.
+- **Scanner Viewfinder Locks**: When building QR camera views inside Tab navigators, the tab stays mounted when navigating away. Always register a React Navigation `focus` listener to reset scanned state refs (e.g. `scannedRef.current = false`) when the scanner screen gains focus, preventing the viewfinder from getting locked.

@@ -5,7 +5,10 @@ import { getXLMBalance, getUSDCBalance } from "../services/stellar/client";
 import { getWallet } from "../services/firebase/firestore";
 
 export const useWallet = () => {
-  const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, setPublicKey, setBalances, setLoadingBalance } = useWalletStore();
+  const { 
+    publicKey, xlmBalance, usdcBalance, isLoadingBalance, 
+    displayCurrencyCode, setPublicKey, setBalances, setLoadingBalance, setDisplayCurrencyCode 
+  } = useWalletStore();
   const { user, profile } = useAuthStore();
 
   // Load wallet public key from profile
@@ -37,5 +40,8 @@ export const useWallet = () => {
     refreshBalances();
   }, [refreshBalances]);
 
-  return { publicKey, xlmBalance, usdcBalance, isLoadingBalance, refreshBalances };
+  return { 
+    publicKey, xlmBalance, usdcBalance, isLoadingBalance, 
+    displayCurrencyCode, setDisplayCurrencyCode, refreshBalances 
+  };
 };

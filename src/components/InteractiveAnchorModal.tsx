@@ -117,6 +117,11 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
       startPolling(config.transferServer, token, response.id);
     } catch (err: any) {
       console.error("Stellar Anchor Flow Error:", err);
+      if (err.response) {
+        console.error("AxiosError Status:", err.response.status);
+        console.error("AxiosError Headers:", JSON.stringify(err.response.headers));
+        console.error("AxiosError Data:", JSON.stringify(err.response.data));
+      }
       setError(err.message || "Failed to initialize interactive transfer");
       setInitLoading(false);
     }

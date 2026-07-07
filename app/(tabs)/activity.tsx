@@ -1,13 +1,15 @@
-import { useState, useMemo } from "react";
-import { View, Text, ScrollView, Pressable, TextInput } from "react-native";
+import { useState, useMemo, useRef, useCallback } from "react";
+import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
+import * as Haptics from "expo-haptics";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 
-import { useTransactions } from "../../src/hooks/useTransactions";
+import { useTransactions, Activity } from "../../src/hooks/useTransactions";
 
 export default function ActivityScreen() {
   const [filter, setFilter] = useState<"All" | "Sent" | "Received">("All");
@@ -16,6 +18,41 @@ export default function ActivityScreen() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilter, setDateFilter] = useState<"All" | "Today" | "Yesterday" | "Older">("All");
   const { activities, isLoading } = useTransactions();
+
+  const detailSheetRef = useRef<BottomSheetModal>(null);
+  const [selectedTx, setSelectedTx] = useState<Activity | null>(null);
+
+  const handleTxPress = (tx: Activity) => {
+    Haptics.selectionAsync();
+    setSelectedTx(tx);
+    detailSheetRef.current?.present();
+  };
+
+  const handleShareReceipt = async () => {
+    if (!selectedTx) return;
+    try {
+      const shareMessage = `StellarPay Receipt\n\n` +
+        `Title: ${selectedTx.title}\n` +
+        `Amount: ${selectedTx.amountPrimary}\n` +
+        `Date: ${selectedTx.dateSection} ${selectedTx.time}\n` +
+        `Status: Successful\n` +
+        `Tx Hash: ${selectedTx.hash || "N/A"}\n` +
+        (selectedTx.memo ? `Note: ${selectedTx.memo}\n` : "");
+
+      await Share.share({
+        message: shareMessage,
+      });
+    } catch (err) {
+      console.warn("Share failed:", err);
+    }
+  };
+
+  const renderBackdrop = useCallback(
+    (props: any) => (
+      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
+    ),
+    []
+  );
 
   const filteredActivities = useMemo(() => {
     return activities.filter(item => {
@@ -130,7 +167,11 @@ export default function ActivityScreen() {
                 </Text>
                 
                 {items.map((item, index) => (
-                  <View key={item.id} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: index === items.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+                  <TouchableOpacity
+                    key={item.id}
+                    onPress={() => handleTxPress(item)}
+                    style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: index === items.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
+                  >
                     <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: item.type === "swap" ? Colors.white : Colors.baseLight, borderWidth: item.type === "swap" ? 1 : 0, borderColor: Colors.borderLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md, overflow: "hidden" }}>
                       <Feather name={item.icon} size={24} color={Colors.textLightPrimary} />
                     </View>
@@ -149,7 +190,7 @@ export default function ActivityScreen() {
                       <Text style={[Typography.labelLarge, { color: item.isPositive ? "#1DB98A" : Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.amountPrimary}</Text>
                       <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.amountSecondary}</Text>
                     </View>
-                  </View>
+                  </TouchableOpacity>
                 ))}
               </View>
             ))
@@ -157,6 +198,128 @@ export default function ActivityScreen() {
         </Animated.View>
 
       </ScrollView>
+
+      {/* Transaction Details Sheet */}
+      <BottomSheetModal
+        ref={detailSheetRef}
+        enableDynamicSizing={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
+      >
+        {selectedTx && (
+          <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.lg }}>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 20 }]}>
+                Transaction Details
+              </Text>
+            </View>
+
+            {/* Main Receipt Info Card */}
+            <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
+              <View style={{
+                width: 64, height: 64, borderRadius: 32,
+                backgroundColor: selectedTx.isPositive ? "rgba(29, 185, 138, 0.1)" : Colors.baseLight,
+                justifyContent: "center", alignItems: "center",
+                marginBottom: Spacing.md
+              }}>
+                <Feather
+                  name={selectedTx.icon}
+                  size={28}
+                  color={selectedTx.isPositive ? Colors.teal : Colors.textLightPrimary}
+                />
+              </View>
+              
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 24, marginBottom: 2 }]}>
+                {selectedTx.title}
+              </Text>
+              
+              {/* Large display fiat amount (primary) */}
+              <Text style={[Typography.displayLarge, { color: selectedTx.isPositive ? Colors.teal : Colors.textLightPrimary, fontWeight: "800", fontSize: 32, marginVertical: 6 }]}>
+                {selectedTx.amountSecondary ? selectedTx.amountSecondary : selectedTx.amountPrimary}
+              </Text>
+
+              {/* Subtext blockchain stablecoin amount */}
+              {selectedTx.amountSecondary && (
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
+                  {selectedTx.amountPrimary}
+                </Text>
+              )}
+
+              {/* Success Badge */}
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(29, 185, 138, 0.1)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.teal, marginRight: 6 }} />
+                <Text style={[Typography.labelSmall, { color: Colors.teal, fontWeight: "700", textTransform: "uppercase", fontSize: 11 }]}>
+                  Successful
+                </Text>
+              </View>
+            </View>
+
+            {/* Transfer Details Panel */}
+            <View style={{ backgroundColor: Colors.baseLight, borderRadius: 20, padding: Spacing.lg, marginBottom: Spacing.xl }}>
+              <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
+                Transfer Details
+              </Text>
+
+              {/* Transfer ID / Hash row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Transaction ID</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                  {selectedTx.hash ? `${selectedTx.hash.substring(0, 10)}...${selectedTx.hash.substring(selectedTx.hash.length - 10)}` : `#${selectedTx.id.substring(0, 8)}`}
+                </Text>
+              </View>
+
+              {/* Transfer Date/Time row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Date & Time</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                  {selectedTx.dateSection} • {selectedTx.time}
+                </Text>
+              </View>
+
+              {/* Transfer Fee row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Transfer Fee</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.teal, fontWeight: "700" }]}>Free</Text>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: Colors.borderLightStrong, marginVertical: Spacing.xs, marginBottom: Spacing.md }} />
+
+              {/* Note / Memo Row */}
+              {selectedTx.memo ? (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: 6 }]}>Notes</Text>
+                  <View style={{ backgroundColor: Colors.white, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.borderLight }}>
+                    <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary }]}>
+                      {selectedTx.memo}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+
+            {/* Action Buttons Row */}
+            <View style={{ flexDirection: "row", gap: Spacing.md }}>
+              <TouchableOpacity
+                onPress={handleShareReceipt}
+                style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
+              >
+                <Feather name="share-2" size={16} color={Colors.textLightPrimary} style={{ marginRight: 8 }} />
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Share</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => detailSheetRef.current?.dismiss()}
+                style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: "#111111", justifyContent: "center", alignItems: "center" }}
+              >
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </BottomSheetView>
+        )}
+      </BottomSheetModal>
     </SafeAreaView>
   );
 }

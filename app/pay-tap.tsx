@@ -13,7 +13,41 @@ import Animated, {
   Easing,
   FadeInDown
 } from "react-native-reanimated";
-import NfcManager, { NfcEvents, NfcTech, Ndef } from "react-native-nfc-manager";
+// Safe conditional import for NFC Manager to prevent crashes in Expo Go
+let NfcManager: any = {
+  isSupported: async () => false,
+  start: async () => {},
+  setEventListener: () => {},
+  cancelTechnologyRequest: async () => {},
+  unregisterTagEvent: async () => {},
+  requestTechnology: async () => {},
+  getTag: async () => null,
+};
+let NfcEvents: any = {
+  DiscoverTag: "DiscoverTag",
+  SessionClosed: "SessionClosed",
+};
+let NfcTech: any = {
+  Ndef: "Ndef",
+};
+let Ndef: any = {
+  text: {
+    decodePayload: (payload: any) => "",
+  }
+};
+
+const hasNativeNfc = !!NativeModules.NfcManager;
+if (hasNativeNfc) {
+  try {
+    const NfcLib = require("react-native-nfc-manager");
+    NfcManager = NfcLib.default || NfcLib;
+    NfcEvents = NfcLib.NfcEvents || NfcEvents;
+    NfcTech = NfcLib.NfcTech || NfcTech;
+    Ndef = NfcLib.Ndef || Ndef;
+  } catch (err) {
+    console.warn("Failed to load native NfcManager:", err);
+  }
+}
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
@@ -203,7 +237,7 @@ export default function PayTapScreen() {
       
       const displayName = profile?.displayName || "Unknown User";
       const handle = profile?.username ? `@${profile.username}` : `@user_${uid.substring(0, 4)}`;
-      const avatar = profile?.avatarUrl || displayName.substring(0, 1).toUpperCase();
+      const avatar = (profile as any)?.avatarUrl || displayName.substring(0, 1).toUpperCase();
       const publicKey = profile?.stellarPublicKey || "";
       
       setTimeout(() => {

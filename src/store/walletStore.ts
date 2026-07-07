@@ -8,11 +8,13 @@ interface WalletState {
   transactions: TransactionCache[];
   isLoadingBalance: boolean;
   isLoadingTx: boolean;
+  displayCurrencyCode: string;
   setPublicKey: (key: string | null) => void;
   setBalances: (xlm: string, usdc: string) => void;
   setTransactions: (txs: TransactionCache[]) => void;
   setLoadingBalance: (v: boolean) => void;
   setLoadingTx: (v: boolean) => void;
+  setDisplayCurrencyCode: (code: string) => void;
 }
 
 export const useWalletStore = create<WalletState>((set) => ({
@@ -22,9 +24,11 @@ export const useWalletStore = create<WalletState>((set) => ({
   transactions: [],
   isLoadingBalance: false,
   isLoadingTx: false,
+  displayCurrencyCode: "USD",
   setPublicKey: (publicKey) => set({ publicKey }),
   setBalances: (xlmBalance, usdcBalance) => set({ xlmBalance, usdcBalance }),
   setTransactions: (transactions) => set({ transactions }),
   setLoadingBalance: (isLoadingBalance) => set({ isLoadingBalance }),
   setLoadingTx: (isLoadingTx) => set({ isLoadingTx }),
+  setDisplayCurrencyCode: (displayCurrencyCode) => set({ displayCurrencyCode }),
 }));

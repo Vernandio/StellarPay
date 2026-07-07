@@ -321,15 +321,12 @@ export const sendWithdrawalPayment = async ({
   console.log("Submitting transaction to Horizon...", envelopeXdr);
 
   try {
-    const params = new URLSearchParams();
-    params.append("tx", envelopeXdr);
-
     const submitResp = await fetch(`${ACTIVE_NETWORK.horizonUrl}/transactions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
       },
-      body: params.toString(),
+      body: `tx=${encodeURIComponent(envelopeXdr)}`,
     });
 
     const submitData = await submitResp.json();

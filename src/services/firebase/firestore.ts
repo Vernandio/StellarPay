@@ -53,6 +53,45 @@ export const getUserByUsername = async (username: string): Promise<UserProfile |
   return snap.empty ? null : (snap.docs[0].data() as UserProfile);
 };
 
+export const getUserByPhone = async (phone: string): Promise<UserProfile | null> => {
+  const q = query(collection(db, "users"), where("phone", "==", phone.trim()), limit(1));
+  const snap = await getDocs(q);
+  return snap.empty ? null : (snap.docs[0].data() as UserProfile);
+};
+
+export const searchUser = async (queryStr: string): Promise<UserProfile | null> => {
+  const cleanQuery = queryStr.trim().toLowerCase();
+  if (!cleanQuery) return null;
+
+  // Try username
+  const cleanUsername = cleanQuery.replace("@", "");
+  let q = query(collection(db, "users"), where("username", "==", cleanUsername), limit(1));
+  let snap = await getDocs(q);
+  if (!snap.empty) return snap.docs[0].data() as UserProfile;
+
+  // Try phone (removing common formatting: space, dash, parentheses, plus sign)
+  const cleanPhone = cleanQuery.replace(/[\s\-\(\)\+]/g, "");
+  // We can match both the exact input and with a leading "+" if the database phone has one
+  q = query(collection(db, "users"), where("phone", "==", cleanQuery), limit(1));
+  snap = await getDocs(q);
+  if (!snap.empty) return snap.docs[0].data() as UserProfile;
+
+  q = query(collection(db, "users"), where("phone", "==", "+" + cleanPhone), limit(1));
+  snap = await getDocs(q);
+  if (!snap.empty) return snap.docs[0].data() as UserProfile;
+
+  q = query(collection(db, "users"), where("phone", "==", cleanPhone), limit(1));
+  snap = await getDocs(q);
+  if (!snap.empty) return snap.docs[0].data() as UserProfile;
+
+  // Try email
+  q = query(collection(db, "users"), where("email", "==", cleanQuery), limit(1));
+  snap = await getDocs(q);
+  if (!snap.empty) return snap.docs[0].data() as UserProfile;
+
+  return null;
+};
+
 export const getWallet = async (uid: string): Promise<WalletData | null> => {
   const snap = await getDoc(doc(db, "wallets", uid));
   return snap.exists() ? (snap.data() as WalletData) : null;

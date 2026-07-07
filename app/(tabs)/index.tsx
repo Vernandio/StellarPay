@@ -1,9 +1,9 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useNavigation } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import { FlashList } from "@shopify/flash-list";
 import { Colors } from "../../src/constants/colors";
@@ -13,22 +13,65 @@ import { useWallet } from "../../src/hooks/useWallet";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
-import { CURRENCIES } from "../../src/constants/currencies";
+import { CURRENCIES, Currency, getCurrencyByCode } from "../../src/constants/currencies";
+import { fetchExchangeRates, ExchangeRates, convertUSDTo } from "../../src/services/exchangeRates";
 import { useTransactions } from "../../src/hooks/useTransactions";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
+import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
+import {
+  subscribeToPendingRequests,
+  updatePaymentRequest,
+  PaymentRequest
+} from "../../src/services/firebase/requests";
+import { saveTransaction } from "../../src/services/firebase/transactions";
+import { createNotification } from "../../src/services/firebase/notifications";
+import { getUserProfile } from "../../src/services/firebase/firestore";
 
 const { width } = Dimensions.get("window");
 
 export default function WalletScreen() {
-  const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, refreshBalances } = useWallet();
+  const { 
+    publicKey, xlmBalance, usdcBalance, isLoadingBalance, 
+    displayCurrencyCode, setDisplayCurrencyCode, refreshBalances 
+  } = useWallet();
   const { user, profile } = useAuth();
-  const { initializeWallet, isProcessing, error: stellarError } = useStellar();
-  const { activities } = useTransactions();
-  const [currency, setCurrency] = useState(CURRENCIES[0]);
+  const { initializeWallet, send, isProcessing, error: stellarError } = useStellar();
+  const { activities, fetchTransactions } = useTransactions();
+  const currency = getCurrencyByCode(displayCurrencyCode);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [isAnchorModalVisible, setIsAnchorModalVisible] = useState(false);
+  const [rates, setRates] = useState<ExchangeRates | null>(null);
+  const [pendingRequests, setPendingRequests] = useState<PaymentRequest[]>([]);
+  const [selectedRequest, setSelectedRequest] = useState<PaymentRequest | null>(null);
+  const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+
+  const pinSheetRef = useRef<PinVerifySheetRef>(null);
+  const navigation = useNavigation();
+
+  // Refresh balances & transaction history whenever the screen is focused
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("focus", () => {
+      refreshBalances();
+      fetchTransactions();
+    });
+    return unsubscribe;
+  }, [navigation, refreshBalances, fetchTransactions]);
+
+  // Subscribe to pending requests
+  useEffect(() => {
+    if (!user?.uid) return;
+    const unsubscribe = subscribeToPendingRequests(user.uid, (reqs) => {
+      setPendingRequests(reqs);
+    });
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  // Fetch live exchange rates
+  useEffect(() => {
+    fetchExchangeRates().then(setRates).catch(console.warn);
+  }, []);
   const [anchorTxType, setAnchorTxType] = useState<"deposit" | "withdraw">("deposit");
   const currencySheetRef = useRef<BottomSheetModal>(null);
 
@@ -75,6 +118,114 @@ export default function WalletScreen() {
       console.error("Wallet keypair validation failed:", err);
     });
   }, [profile, isProcessing]);
+
+  const handlePayRequest = (req: PaymentRequest) => {
+    setSelectedRequest(req);
+    pinSheetRef.current?.present();
+  };
+
+  const handleExecutePayment = async () => {
+    if (!selectedRequest || !user) return;
+    setIsProcessingPayment(true);
+
+    try {
+      // Look up requester's public key
+      const requester = await getUserProfile(selectedRequest.senderUid);
+      if (!requester?.stellarPublicKey) {
+        throw new Error("Requester has not initialized their Stellar wallet yet.");
+      }
+
+      // Execute USDC payment on Stellar
+      const txHash = await send(
+        requester.stellarPublicKey,
+        selectedRequest.amountUSD,
+        "USDC",
+        selectedRequest.message
+      );
+
+      // Update payment request status in Firestore
+      await updatePaymentRequest(selectedRequest.id, {
+        status: "paid",
+        txHash,
+      });
+
+      // Save transaction record to Firestore for recipient & sender
+      await saveTransaction({
+        hash: txHash,
+        senderUid: user.uid,
+        senderUsername: profile?.username || "",
+        receiverUid: selectedRequest.senderUid,
+        receiverUsername: selectedRequest.senderUsername,
+        amountUSD: selectedRequest.amountUSD,
+        displayCurrency: "USD",
+        displayAmount: selectedRequest.amountUSD,
+        memo: selectedRequest.message,
+        status: "completed",
+      });
+
+      // Notify the requester
+      await createNotification({
+        uid: selectedRequest.senderUid,
+        title: "Request Paid",
+        message: `${profile?.displayName || profile?.username} paid your request of $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD`,
+        type: "request_paid",
+        referenceId: selectedRequest.id,
+      });
+
+      // Notify the current user
+      await createNotification({
+        uid: user.uid,
+        title: "Payment Sent",
+        message: `You paid $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD to ${selectedRequest.senderDisplayName}`,
+        type: "payment_sent",
+        referenceId: txHash,
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Success", `Paid $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD successfully.`);
+      refreshBalances();
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Payment Failed", err.message || "Failed to pay request.");
+    } finally {
+      setIsProcessingPayment(false);
+      setSelectedRequest(null);
+    }
+  };
+
+  const handleDeclineRequest = async (req: PaymentRequest) => {
+    if (!user) return;
+
+    Alert.alert(
+      "Decline Request",
+      `Are you sure you want to decline this request for $${parseFloat(req.amountUSD).toFixed(2)} USD from ${req.senderDisplayName}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Decline",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updatePaymentRequest(req.id, { status: "declined" });
+
+              // Notify the requester
+              await createNotification({
+                uid: req.senderUid,
+                title: "Request Declined",
+                message: `${profile?.displayName || profile?.username} declined your request of $${parseFloat(req.amountUSD).toFixed(2)} USD`,
+                type: "request_declined",
+                referenceId: req.id,
+              });
+
+              await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to decline request.");
+            }
+          },
+        },
+      ]
+    );
+  };
 
   if (isProcessing || (profile && !profile.stellarPublicKey)) {
     return (
@@ -149,7 +300,7 @@ export default function WalletScreen() {
               </View>
 
               <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.md }]}>
-                {isBalanceHidden ? "****" : `${currency.symbol}${formatAmount(Number(usdcBalance) * currency.rate)}`}
+                {isBalanceHidden ? "****" : `${currency.symbol}${formatAmount(Number(usdcBalance) * (rates?.[currency.code as keyof ExchangeRates] ?? 1))}`}
               </Text>
 
               <View style={{ alignSelf: "flex-start", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: 99, flexDirection: "row", alignItems: "center", marginBottom: Spacing.xl }}>
@@ -161,10 +312,10 @@ export default function WalletScreen() {
 
               <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.lg }}>
                 {[
-                  { icon: "plus", label: "Add Money", route: "/add-money" },
-                  { icon: "send", label: "Send", route: "/pay-friends" },
-                  { icon: "download", label: "Request", route: "/request-friends" },
-                  { icon: "external-link", label: "Withdraw", route: "/withdraw" }
+                  { icon: "plus", label: "Add Money", route: "" },
+                  { icon: "send", label: "Send", route: "/pay?tab=Pay" },
+                  { icon: "download", label: "Request", route: "/pay?tab=Request" },
+                  { icon: "external-link", label: "Withdraw", route: "" }
                 ].map((action, i) => (
                   <Pressable 
                     key={i} 
@@ -192,6 +343,70 @@ export default function WalletScreen() {
               </View>
             </View>
           </Animated.View>
+
+          {/* Pending Requests */}
+          {pendingRequests.length > 0 && (
+            <Animated.View entering={FadeInDown.duration(300).delay(350)} style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}>
+              <View style={{ backgroundColor: Colors.surfaceLight, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, padding: Spacing.lg }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                  <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Pending Requests</Text>
+                  <View style={{ backgroundColor: Colors.primary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
+                    <Text style={[Typography.labelSmall, { color: Colors.white, fontWeight: "700" }]}>{pendingRequests.length}</Text>
+                  </View>
+                </View>
+                <FlashList
+                  data={pendingRequests}
+                  // @ts-ignore
+                  estimatedItemSize={90}
+                  renderItem={({ item }) => {
+                    const localAmount = rates
+                      ? convertUSDTo(parseFloat(item.amountUSD), currency.code as keyof ExchangeRates, rates)
+                      : item.amountUSD;
+                    return (
+                      <View style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: pendingRequests.indexOf(item) === pendingRequests.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                            {item.senderDisplayName}
+                          </Text>
+                          <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 2 }]} numberOfLines={1}>
+                            {item.message || "Requested money"}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end", marginRight: Spacing.md }}>
+                          <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
+                            {currency.symbol}{localAmount}
+                          </Text>
+                          {item.requestedCurrency && item.requestedCurrency !== currency.code ? (
+                            <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                              {item.requestedCurrency} {parseFloat(item.requestedAmount || "0").toLocaleString(undefined, { minimumFractionDigits: item.requestedCurrency === "VND" || item.requestedCurrency === "IDR" ? 0 : 2 })}
+                            </Text>
+                          ) : currency.code !== "USD" ? (
+                            <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                              ${parseFloat(item.amountUSD).toFixed(2)}
+                            </Text>
+                          ) : null}
+                        </View>
+                        <View style={{ flexDirection: "row", gap: Spacing.xs }}>
+                          <TouchableOpacity
+                            onPress={() => handleDeclineRequest(item)}
+                            style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center" }}
+                          >
+                            <Feather name="x" size={16} color={Colors.danger} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => handlePayRequest(item)}
+                            style={{ width: 56, height: 36, borderRadius: 18, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center" }}
+                          >
+                            <Text style={[Typography.labelSmall, { color: Colors.white, fontWeight: "700" }]}>Pay</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  }}
+                />
+              </View>
+            </Animated.View>
+          )}
 
           {/* My Balances */}
           <Animated.View entering={FadeInDown.duration(300).delay(400)} style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}>
@@ -276,6 +491,7 @@ export default function WalletScreen() {
         backdropComponent={renderBackdrop}
         backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
         handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
       >
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
           <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Select Display Currency</Text>
@@ -283,18 +499,21 @@ export default function WalletScreen() {
             <TouchableOpacity
               key={c.code}
               onPress={() => {
-                setCurrency(c);
+                setDisplayCurrencyCode(c.code);
                 Haptics.selectionAsync();
                 currencySheetRef.current?.dismiss();
               }}
-              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight }}
+              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight, minHeight: 56 }}
               activeOpacity={0.7}
             >
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>{c.symbol}</Text>
+                <Text style={{ fontSize: 20 }}>{c.flag}</Text>
               </View>
-              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, flex: 1 }]}>{c.code}</Text>
-              {currency.code === c.code && <Feather name="check" size={24} color={"#111111"} />}
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{c.code}</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{c.name}</Text>
+              </View>
+              {currency.code === c.code && <Feather name="check" size={24} color={Colors.teal} />}
             </TouchableOpacity>
           ))}
         </BottomSheetView>
@@ -305,6 +524,7 @@ export default function WalletScreen() {
         transactionType={anchorTxType}
         onSuccess={refreshBalances}
       />
+      <PinVerifySheet ref={pinSheetRef} onSuccess={handleExecutePayment} />
     </View>
   );
 }

@@ -1,4 +1,4 @@
-import { View, Text, TextInput, KeyboardAvoidingView, Platform, Keyboard, TouchableOpacity, ScrollView, Dimensions } from "react-native";
+import { View, Text, TextInput, KeyboardAvoidingView, Platform, Keyboard, TouchableOpacity, ScrollView, Dimensions, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
@@ -9,6 +9,11 @@ import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES } from "../src/constants/currencies";
+import { useAuthStore } from "../src/store/authStore";
+import { getUserByUsername } from "../src/services/firebase/firestore";
+import { createPaymentRequest } from "../src/services/firebase/requests";
+import { createNotification } from "../src/services/firebase/notifications";
+import { fetchExchangeRates, ExchangeRates, convertToUSD } from "../src/services/exchangeRates";
 
 const { height } = Dimensions.get("window");
 
@@ -25,16 +30,32 @@ export default function RequestScreen() {
   
   const isGroup = parsedGroup.length > 0;
   
+  const { profile } = useAuthStore();
   const [amount, setAmount] = useState("");
   const [forReason, setForReason] = useState("");
   const [message, setMessage] = useState("");
   const [currency, setCurrency] = useState(CURRENCIES[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [groupAmounts, setGroupAmounts] = useState<{[id: string]: string}>({});
+  const [rates, setRates] = useState<ExchangeRates | null>(null);
+  const [ratesLoading, setRatesLoading] = useState(true);
   
   const amountInputRef = useRef<TextInput>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => {
+    const loadRates = async () => {
+      try {
+        const r = await fetchExchangeRates();
+        setRates(r);
+      } catch (e) {
+        console.error("Failed to load exchange rates in RequestScreen:", e);
+      } finally {
+        setRatesLoading(false);
+      }
+    };
+    loadRates();
+
     const timer = setTimeout(() => {
       amountInputRef.current?.focus();
     }, 400);
@@ -80,8 +101,116 @@ export default function RequestScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+
+    setIsSubmitting(true);
+    try {
+      const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
+      const rateToUse = localRates[currency.code as keyof ExchangeRates] || 1;
+
+      if (isGroup) {
+        // Send requests to all members in the group
+        for (const friend of parsedGroup) {
+          const friendAmount = groupAmounts[friend.id] || "0";
+          const friendAmountNum = parseFloat(friendAmount);
+          if (friendAmountNum <= 0) continue;
+
+          const usdAmountVal = currency.code === "USD"
+            ? friendAmountNum.toFixed(2)
+            : (friendAmountNum / rateToUse).toFixed(2);
+
+          const usernameClean = friend.handle.replace('@', '');
+
+          // Create payment request
+          const requestId = await createPaymentRequest({
+            senderUid: profile?.uid || '',
+            senderUsername: profile?.username || '',
+            senderDisplayName: profile?.displayName || profile?.username || '',
+            receiverUid: friend.id,
+            receiverUsername: usernameClean,
+            amountUSD: usdAmountVal,
+            requestedCurrency: currency.code,
+            requestedAmount: friendAmountNum.toString(),
+            message: message || forReason || '',
+          });
+
+          // Format localized display string for notification
+          const formattedSplitAmount = new Intl.NumberFormat("en-US", {
+            minimumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+            maximumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+          }).format(friendAmountNum);
+
+          const displayRequestStr = currency.code === "USD"
+            ? `$${formattedSplitAmount} USD`
+            : `${currency.symbol}${formattedSplitAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
+
+          // Create notification for the recipient
+          await createNotification({
+            uid: friend.id,
+            title: 'Split Bill Request',
+            message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ''}`,
+            type: 'request_received',
+            referenceId: requestId,
+          });
+        }
+
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Split Sent!', 'Your split bill requests have been sent.');
+        router.navigate("/(tabs)/pay");
+      } else {
+        // Look up recipient
+        const recipientUsername = (params.handle as string)?.replace('@', '') || '';
+        const recipient = await getUserByUsername(recipientUsername);
+
+        if (!recipient) {
+          Alert.alert('Error', 'Could not find recipient.');
+          return;
+        }
+
+        const amountNum = parseFloat(amount);
+        const usdAmountVal = currency.code === "USD" ? amountNum.toFixed(2) : (amountNum / rateToUse).toFixed(2);
+
+        // Create payment request
+        const requestId = await createPaymentRequest({
+          senderUid: profile?.uid || '',
+          senderUsername: profile?.username || '',
+          senderDisplayName: profile?.displayName || profile?.username || '',
+          receiverUid: recipient.uid,
+          receiverUsername: recipient.username,
+          amountUSD: usdAmountVal,
+          requestedCurrency: currency.code,
+          requestedAmount: amountNum.toString(),
+          message: message || forReason || '',
+        });
+
+        // Format localized display string for notification
+        const formattedAmount = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+          maximumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+        }).format(amountNum);
+
+        const displayRequestStr = currency.code === "USD"
+          ? `$${formattedAmount} USD`
+          : `${currency.symbol}${formattedAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
+
+        // Create notification for the recipient
+        await createNotification({
+          uid: recipient.uid,
+          title: 'Payment Request',
+          message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ''}`,
+          type: 'request_received',
+          referenceId: requestId,
+        });
+
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        Alert.alert('Request Sent!', `Your request for ${displayRequestStr} has been sent.`);
+        router.back();
+      }
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('Error', err.message || 'Failed to send request.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const renderBackdrop = useCallback(
@@ -92,7 +221,7 @@ export default function RequestScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8F9FA" }}>
+    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           
@@ -169,12 +298,26 @@ export default function RequestScreen() {
                     Keyboard.dismiss();
                     currencySheetRef.current?.present();
                   }}
-                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F2F4F7", paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 99, marginLeft: Spacing.sm }}
+                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 99, marginLeft: Spacing.sm }}
                 >
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>{currency.code}</Text>
                   <Feather name="chevron-down" size={16} color={Colors.textLightPrimary} />
                 </TouchableOpacity>
               </View>
+
+              {/* USD Equivalent (if not USD) */}
+              {currency.code !== "USD" && amount ? (() => {
+                const amountNum = parseFloat(amount);
+                if (isNaN(amountNum) || amountNum <= 0) return null;
+                const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
+                const rateToUse = localRates[currency.code as keyof ExchangeRates] || 1;
+                const usdVal = (amountNum / rateToUse).toFixed(2);
+                return (
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: -Spacing.sm, marginBottom: Spacing.lg }]}>
+                    ≈ ${usdVal} USD
+                  </Text>
+                );
+              })() : null}
 
               {/* For */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.sm }]}>For</Text>
@@ -218,7 +361,7 @@ export default function RequestScreen() {
                           {contact.name}
                         </Text>
                       </View>
-                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#F8F9FA", borderRadius: 12, paddingHorizontal: Spacing.sm, height: 40, width: 100 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, borderRadius: 12, paddingHorizontal: Spacing.sm, height: 40, width: 100 }}>
                         <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginRight: 2 }]}>{currency.symbol}</Text>
                         <TextInput
                           value={groupAmounts[contact.id] || ""}
@@ -239,19 +382,23 @@ export default function RequestScreen() {
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: "#F8F9FA" }}>
+          <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: Colors.baseLight }}>
             <TouchableOpacity
               onPress={handleRequest}
               style={{
-                backgroundColor: "#111111",
+                backgroundColor: Colors.textLightPrimary,
                 borderRadius: 24,
                 paddingVertical: 18,
                 alignItems: "center",
-                opacity: amount && parseFloat(amount) > 0 ? 1 : 0.5,
+                opacity: amount && parseFloat(amount) > 0 && !isSubmitting ? 1 : 0.5,
               }}
-              disabled={!amount || parseFloat(amount) <= 0}
+              disabled={!amount || parseFloat(amount) <= 0 || isSubmitting}
             >
-              <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Request</Text>
+              {isSubmitting ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Request</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -279,11 +426,14 @@ export default function RequestScreen() {
               activeOpacity={0.7}
             >
               <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>{c.symbol}</Text>
+                <Text style={{ fontSize: 22 }}>{c.flag}</Text>
               </View>
-              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, flex: 1 }]}>{c.code}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{c.code}</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{c.name}</Text>
+              </View>
               {currency.code === c.code && (
-                <Feather name="check" size={24} color={"#111111"} />
+                <Feather name="check" size={24} color={Colors.textLightPrimary} />
               )}
             </TouchableOpacity>
           ))}

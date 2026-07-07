@@ -1,9 +1,26 @@
-export const CURRENCIES = [
-  { symbol: "$", code: "USD", rate: 1, balance: "12,450.00" },
-  { symbol: "S$", code: "SGD", rate: 1.34, balance: "16,683.00" },
-  { symbol: "฿", code: "THB", rate: 36.4, balance: "453,180.00" },
-  { symbol: "Rp", code: "IDR", rate: 15600, balance: "194,220,000" },
-  { symbol: "₱", code: "PHP", rate: 55.9, balance: "695,955" },
-  { symbol: "RM", code: "MYR", rate: 4.7, balance: "58,515" },
-  { symbol: "₫", code: "VND", rate: 25400, balance: "316,230,000" },
+// ── Supported Currencies ──────────────────────────────────────────────
+// Target currencies for StellarPay hackathon (SEA region focus)
+// Rates here are fallback defaults — live rates come from exchangeRates.ts
+// ──────────────────────────────────────────────────────────────────────
+
+export interface Currency {
+  symbol: string;
+  code: string;
+  name: string;
+  flag: string;
+  /** Decimal places for display formatting */
+  decimals: number;
+}
+
+export const CURRENCIES: Currency[] = [
+  { symbol: "$",  code: "USD", name: "US Dollar",         flag: "🇺🇸", decimals: 2 },
+  { symbol: "Rp", code: "IDR", name: "Indonesian Rupiah", flag: "🇮🇩", decimals: 0 },
+  { symbol: "₱",  code: "PHP", name: "Philippine Peso",   flag: "🇵🇭", decimals: 2 },
+  { symbol: "₫",  code: "VND", name: "Vietnamese Dong",   flag: "🇻🇳", decimals: 0 },
+  { symbol: "S$", code: "SGD", name: "Singapore Dollar",  flag: "🇸🇬", decimals: 2 },
+  { symbol: "RM", code: "MYR", name: "Malaysian Ringgit", flag: "🇲🇾", decimals: 2 },
 ];
+
+/** Get currency config by code */
+export const getCurrencyByCode = (code: string): Currency =>
+  CURRENCIES.find((c) => c.code === code) || CURRENCIES[0];

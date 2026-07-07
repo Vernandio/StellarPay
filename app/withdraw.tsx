@@ -100,9 +100,7 @@ export default function WithdrawScreen() {
                 selectionColor={Colors.teal}
               />
             </View>
-            <View style={{ backgroundColor: Colors.white, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99, marginTop: Spacing.sm, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 }}>
-              <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, fontWeight: "600" }]}>{currency.code} Balance: {currency.symbol}{currency.balance}</Text>
-            </View>
+              <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, fontWeight: "600" }]}>{currency.code} • {currency.name}</Text>
           </View>
 
           {/* Withdraw Destinations */}

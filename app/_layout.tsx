@@ -6,9 +6,13 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useNotificationListener } from "../src/hooks/useNotificationListener";
 import "../global.css";
 
 export default function RootLayout() {
+  // Listen to Firestore notifications and display local OS alerts
+  useNotificationListener();
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
@@ -40,6 +44,7 @@ export default function RootLayout() {
             <Stack.Screen name="add-money" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="withdraw" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="send" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="qr-pay" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="request" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="pay-friends" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="request-friends" options={{ animation: "slide_from_right" }} />
