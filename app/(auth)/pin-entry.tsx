@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -140,8 +141,8 @@ export default function PinEntryScreen() {
   const pinComplete = pin.join("").length === 6;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000000" }}>
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, justifyContent: "space-between" }}
@@ -195,14 +196,14 @@ export default function PinEntryScreen() {
               </Text>
 
               {profileLoading ? (
-                <ActivityIndicator color="rgba(255,255,255,0.6)" style={{ marginTop: Spacing.xs }} />
+                <ActivityIndicator color="Colors.textLightSecondary" style={{ marginTop: Spacing.xs }} />
               ) : (
                 <>
                   <Text
                     style={[
                       Typography.bodyLarge,
                       {
-                        color: "rgba(255,255,255,0.6)",
+                        color: Colors.textLightSecondary,
                         textAlign: "center",
                         paddingHorizontal: Spacing.xl,
                       },
@@ -216,17 +217,17 @@ export default function PinEntryScreen() {
                         flexDirection: "row",
                         alignItems: "center",
                         marginTop: Spacing.sm,
-                        backgroundColor: "rgba(255,255,255,0.08)",
+                        backgroundColor: Colors.borderLightStrong,
                         paddingHorizontal: Spacing.md,
                         paddingVertical: Spacing.xs,
                         borderRadius: 999,
                       }}
                     >
-                      <Feather name="user" size={13} color="rgba(255,255,255,0.7)" style={{ marginRight: 6 }} />
+                      <Feather name="user" size={13} color={Colors.textLightPrimary} style={{ marginRight: 6 }} />
                       <Text
                         style={[
                           Typography.bodySmall,
-                          { color: "rgba(255,255,255,0.85)", fontWeight: "600" },
+                          { color: Colors.textLightPrimary, fontWeight: "600" },
                         ]}
                       >
                         {accountLabel}
@@ -242,17 +243,15 @@ export default function PinEntryScreen() {
           <Animated.View
             entering={FadeInDown.duration(400).delay(300).springify()}
             style={{
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.surfaceLight,
+              borderWidth: 0.5,
+              borderColor: Colors.borderLight,
               borderTopLeftRadius: 32,
               borderTopRightRadius: 32,
               paddingTop: Spacing.xxl,
               paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -12 },
-              shadowOpacity: 0.03,
-              shadowRadius: 24,
-              elevation: 8,
+              shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8,
               zIndex: 10,
               flex: 1,
             }}
@@ -298,12 +297,18 @@ export default function PinEntryScreen() {
                       fontWeight: "700",
                       width: 50,
                       height: 60,
-                      backgroundColor: Colors.baseLight,
+                      backgroundColor: Colors.surfaceLight,
                       borderWidth: 1,
                       borderColor: digit ? Colors.primary : Colors.borderLight,
                       borderRadius: 12,
                       textAlign: "center",
                       color: Colors.textLightPrimary,
+                      ...(digit ? {
+                        shadowColor: Colors.primary,
+                        shadowOffset: { width: 0, height: 4 },
+                        shadowOpacity: 0.15,
+                        shadowRadius: 16,
+                      } : {})
                     }}
                   />
                 ))}
@@ -312,23 +317,33 @@ export default function PinEntryScreen() {
               <Pressable
                 onPress={() => verifyCode(pin.join(""))}
                 disabled={!pinComplete || isLoading}
-                style={{
-                  height: 52,
-                  borderRadius: 16,
-                  justifyContent: "center",
-                  alignItems: "center",
-                  backgroundColor: "#000",
-                  opacity: !pinComplete || isLoading ? 0.4 : 1,
+                style={({ pressed }) => ({
+                  borderRadius: 9999,
+                  overflow: "hidden",
+                  opacity: !pinComplete || isLoading ? 0.4 : (pressed ? 0.9 : 1),
+                  shadowColor: Colors.primary,
+                  shadowOffset: { width: 0, height: 8 },
+                  shadowOpacity: isLoading ? 0 : (pressed ? 0.4 : 0.2),
+                  shadowRadius: 24,
                   marginBottom: Spacing.md,
-                }}
+                })}
               >
-                {isLoading ? (
-                  <ActivityIndicator color={Colors.white} />
-                ) : (
-                  <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>
-                    Unlock
-                  </Text>
-                )}
+                <LinearGradient
+                  colors={[Colors.primary, Colors.primaryDark]}
+                  style={{
+                    height: 56,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  {isLoading ? (
+                    <ActivityIndicator color={Colors.white} />
+                  ) : (
+                    <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>
+                      Unlock
+                    </Text>
+                  )}
+                </LinearGradient>
               </Pressable>
 
               <Pressable
@@ -348,17 +363,6 @@ export default function PinEntryScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <View
-        style={{
-          backgroundColor: Colors.white,
-          height: 40,
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: -1,
-        }}
-      />
     </View>
   );
 }

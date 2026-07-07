@@ -1,9 +1,10 @@
 import {
-  TransactionBuilder, Operation, Asset, BASE_FEE, Memo, MemoText,
+  TransactionBuilder, Operation, Asset, BASE_FEE, Memo,
 } from "@stellar/stellar-sdk";
-import { getHorizonServer, loadAccount } from "./client";
+import { loadAccount } from "./client";
 import { ACTIVE_NETWORK, USDC_ASSET, APP_MEMO_PREFIX } from "../../constants/stellar";
 import { loadKeypairFromSecureStore } from "./wallet";
+import { Buffer } from "buffer";
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -11,6 +12,51 @@ const getAsset = (assetCode: "XLM" | "USDC") =>
   assetCode === "XLM"
     ? Asset.native()
     : new Asset(USDC_ASSET.code, USDC_ASSET.issuer);
+
+/**
+ * Submit a signed Stellar transaction to Horizon via raw fetch.
+ *
+ * WHY: The Stellar JS SDK's `server.submitTransaction(tx)` internally calls
+ *      `tx.toEnvelope().toXDR().toString("base64")`.
+ *      In React Native (Hermes), `toXDR()` returns a Uint8Array — NOT a Node
+ *      Buffer — so `.toString("base64")` silently falls back to the default
+ *      Uint8Array.toString(), producing comma-separated byte values like
+ *      "0,0,0,2,14,120,...".  Horizon rejects this with "Transaction Malformed".
+ *
+ *      Additionally, `feaxios` (the SDK's internal HTTP client) passes a
+ *      URLSearchParams body to React Native's fetch, which silently drops it.
+ *
+ *      By manually wrapping the raw bytes in `Buffer.from()` and submitting
+ *      via `fetch` with a plain string body, we bypass both issues.
+ */
+const submitTxToHorizon = async (tx: any): Promise<string> => {
+  // Get raw XDR bytes (Uint8Array) and convert to real base64 via Buffer polyfill
+  const xdrBytes: Uint8Array = tx.toEnvelope().toXDR();
+  const xdrBase64 = Buffer.from(xdrBytes).toString("base64");
+
+  console.log("XDR_B64:", xdrBase64.substring(0, 80) + "...");
+
+  const horizonUrl = ACTIVE_NETWORK.horizonUrl;
+  const response = await fetch(`${horizonUrl}/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: `tx=${encodeURIComponent(xdrBase64)}`,
+  });
+
+  const data = await response.json();
+
+  if (!response.ok) {
+    console.error("HORIZON ERR:", JSON.stringify(data));
+    throw new Error(
+      data?.extras?.result_codes
+        ? `Stellar tx failed: ${JSON.stringify(data.extras.result_codes)}`
+        : data?.detail || `Horizon returned ${response.status}`
+    );
+  }
+
+  console.log("TX SUCCESS:", data.hash);
+  return data.hash;
+};
 
 // ── Send payment (P2P) ────────────────────────────────────────────────
 
@@ -32,7 +78,6 @@ export const sendPayment = async ({
   const keypair = await loadKeypairFromSecureStore(senderUid);
   if (!keypair) throw new Error("Wallet keypair not found");
 
-  const server = getHorizonServer();
   const account = await loadAccount(senderPublicKey);
 
   const txBuilder = new TransactionBuilder(account, {
@@ -50,11 +95,11 @@ export const sendPayment = async ({
     txBuilder.addMemo(Memo.text(`${APP_MEMO_PREFIX}${memo}`.substring(0, 28)));
   }
 
+  console.log("SENDING:", { senderUid, senderPublicKey, destinationAddress, amount, asset });
   const tx = txBuilder.setTimeout(30).build();
   tx.sign(keypair);
 
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+  return submitTxToHorizon(tx);
 };
 
 // ── Cross-border path payment ─────────────────────────────────────────
@@ -79,7 +124,6 @@ export const sendPathPayment = async ({
   const keypair = await loadKeypairFromSecureStore(senderUid);
   if (!keypair) throw new Error("Wallet keypair not found");
 
-  const server = getHorizonServer();
   const account = await loadAccount(senderPublicKey);
 
   const tx = new TransactionBuilder(account, {
@@ -100,8 +144,8 @@ export const sendPathPayment = async ({
     .build();
 
   tx.sign(keypair);
-  const result = await server.submitTransaction(tx);
-  return result.hash;
+
+  return submitTxToHorizon(tx);
 };
 
 // ── Query available paths before sending ─────────────────────────────
@@ -112,12 +156,8 @@ export const findPaymentPaths = async (
   destAsset: "XLM" | "USDC",
   destAmount: string
 ) => {
-  const server = getHorizonServer();
-  return server
-    .strictReceivePaths(
-      sourcePublicKey,
-      getAsset(destAsset),
-      destAmount
-    )
-    .call();
+  const response = await fetch(
+    `${ACTIVE_NETWORK.horizonUrl}/paths/strict-receive?source_account=${sourcePublicKey}&destination_asset_type=${destAsset === "XLM" ? "native" : "credit_alphanum4"}&destination_asset_code=${destAsset === "XLM" ? "" : USDC_ASSET.code}&destination_asset_issuer=${destAsset === "XLM" ? "" : USDC_ASSET.issuer}&destination_amount=${destAmount}`
+  );
+  return response.json();
 };

@@ -10,6 +10,7 @@
 
 // 1. Crypto polyfill (must be first)
 require("react-native-get-random-values");
+require("react-native-url-polyfill/auto");
 
 // 2. TextEncoder/TextDecoder polyfill (required by @stellar/stellar-sdk for
 //    hashing the network passphrase during transaction signing on Hermes/iOS)
@@ -109,4 +110,15 @@ if (typeof global.MessageEvent === "undefined") {
 }
 
 // 7. Boot Expo Router (this triggers route scanning and module evaluation)
+
+// 8. Patch fetch to stringify URLSearchParams (feaxios bug in React Native)
+const originalFetch = global.fetch;
+global.fetch = function(url, options) {
+  if (options && options.body && typeof options.body === 'object' && options.body instanceof URLSearchParams) {
+    options.body = options.body.toString();
+  }
+  return originalFetch(url, options);
+};
+
 require("expo-router/entry");
+

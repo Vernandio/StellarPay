@@ -14,6 +14,7 @@ import { useAuth } from "../../src/hooks/useAuth";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
 import { CURRENCIES } from "../../src/constants/currencies";
+import { useTransactions } from "../../src/hooks/useTransactions";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
@@ -24,6 +25,7 @@ export default function WalletScreen() {
   const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, refreshBalances } = useWallet();
   const { user, profile } = useAuth();
   const { initializeWallet, isProcessing, error: stellarError } = useStellar();
+  const { activities } = useTransactions();
   const [currency, setCurrency] = useState(CURRENCIES[0]);
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [isAnchorModalVisible, setIsAnchorModalVisible] = useState(false);
@@ -97,15 +99,7 @@ export default function WalletScreen() {
 
   const balances = [
     { id: "usdc", name: "USDC", desc: "USD Coin (Stellar)", amount: usdcBalance, fiat: usdcBalance, icon: "dollar-sign", color: "#2775CA" },
-    { id: "usdt", name: "USDT", desc: "Tether (Stellar)", amount: 420.50, fiat: 420.50, icon: "dollar-sign", color: "#26A17B" },
-    { id: "xlm", name: "XLM", desc: "Stellar Lumens", amount: xlmBalance, fiat: 542.32, icon: "aperture", color: "#000000" },
-  ];
-
-  const activities = [
-    { id: "1", title: "To Sarah", time: "Today, 9:20 AM", amount: "- $25.00", subAmount: "- 12.50 USDC", type: "send", avatar: require("../../assets/images/avatar.png") },
-    { id: "2", title: "Starbucks", time: "Today, 8:45 AM", amount: "- $6.80", subAmount: "- 6.80 USDC", type: "merchant", icon: "coffee", color: "#00704A" },
-    { id: "3", title: "Paid to Coffee House", time: "Yesterday, 6:32 PM", amount: "- $15.25", subAmount: "- 15.25 USDC", type: "merchant", icon: "coffee", color: "#D4B098" },
-    { id: "4", title: "Swap USDC -> XLM", time: "Yesterday, 4:10 PM", amount: "+ 25.00 XLM", subAmount: "+ $24.80", type: "swap", icon: "refresh-cw", color: Colors.surface, iconColor: Colors.textLightPrimary, isPositive: true },
+    { id: "xlm", name: "XLM", desc: "Stellar Lumens", amount: xlmBalance, fiat: Number(xlmBalance) * 0.15, icon: "aperture", color: "#000000" },
   ];
 
   return (
@@ -199,29 +193,6 @@ export default function WalletScreen() {
             </View>
           </Animated.View>
 
-          {/* Quick Actions Grid */}
-          <Animated.View entering={FadeInDown.duration(300).delay(300)} style={{ paddingHorizontal: Spacing.lg, flexDirection: "row", justifyContent: "space-between", marginBottom: Spacing.xl }}>
-            {[
-              { icon: "maximize", label: "Scan QR", sub: "Pay merchant", route: "/qr" },
-              { icon: "wifi", label: "Tap to Pay", sub: "Instantly", route: "/pay-tap" },
-              { icon: "repeat", label: "Swap", sub: "Exchange assets", route: "/swap" }
-            ].map((action, i) => (
-              <Pressable 
-                key={i} 
-                style={{ flex: 1, alignItems: "center", backgroundColor: Colors.surfaceLight, borderRadius: 16, paddingVertical: Spacing.md, paddingHorizontal: Spacing.xs, marginHorizontal: i > 0 ? Spacing.xs : 0, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}
-                onPress={() => {
-                  if (action.route) {
-                    router.push(action.route as any);
-                  }
-                }}
-              >
-                <Feather name={action.icon as any} size={24} color={Colors.textLightPrimary} style={{ marginBottom: Spacing.sm }} />
-                <Text style={[Typography.labelSmall, { color: Colors.textLightPrimary, textAlign: "center", textTransform: "none", fontSize: 12, marginBottom: 2 }]}>{action.label}</Text>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, fontSize: 10, textAlign: "center" }]}>{action.sub}</Text>
-              </Pressable>
-            ))}
-          </Animated.View>
-
           {/* My Balances */}
           <Animated.View entering={FadeInDown.duration(300).delay(400)} style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}>
             <View style={{ backgroundColor: Colors.surfaceLight, borderRadius: 16, overflow: "hidden", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
@@ -272,25 +243,26 @@ export default function WalletScreen() {
                   <Feather name="chevron-right" size={16} color={Colors.textLightSecondary} />
                 </Pressable>
               </View>
-              {activities.map((item, index) => (
-                <Pressable key={item.id} style={{ flexDirection: "row", alignItems: "center", padding: Spacing.md, paddingHorizontal: Spacing.lg, borderBottomWidth: index === activities.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
-                  {item.avatar ? (
-                    <Image source={item.avatar} style={{ width: 40, height: 40, borderRadius: 20, marginRight: Spacing.md }} />
-                  ) : (
-                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: item.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md, borderWidth: item.id === "4" ? 1 : 0, borderColor: Colors.borderLight }}>
-                      <Feather name={item.icon as any} size={20} color={item.iconColor || Colors.white} />
-                    </View>
-                  )}
+              {activities.slice(0, 4).map((item, index) => (
+                <Pressable key={item.id} style={{ flexDirection: "row", alignItems: "center", padding: Spacing.md, paddingHorizontal: Spacing.lg, borderBottomWidth: index === Math.min(activities.length, 4) - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: item.type === "swap" ? Colors.white : Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md, borderWidth: item.type === "swap" ? 1 : 0, borderColor: Colors.borderLight }}>
+                    <Feather name={item.icon as any} size={20} color={item.type === "swap" ? Colors.textLightPrimary : Colors.textLightPrimary} />
+                  </View>
                   <View style={{ flex: 1 }}>
                     <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginBottom: 2 }]}>{item.title}</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.time}</Text>
+                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.dateSection === "Today" || item.dateSection === "Yesterday" ? `${item.dateSection}, ` : ""}{item.time}</Text>
                   </View>
                   <View style={{ alignItems: "flex-end" }}>
-                    <Text style={[Typography.bodyLarge, { color: item.isPositive ? Colors.teal : Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.amount}</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.subAmount}</Text>
+                    <Text style={[Typography.bodyLarge, { color: item.isPositive ? Colors.teal : Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.amountPrimary}</Text>
+                    {item.amountSecondary && <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.amountSecondary}</Text>}
                   </View>
                 </Pressable>
               ))}
+              {activities.length === 0 && (
+                <View style={{ padding: Spacing.xl, alignItems: "center" }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>No recent activity</Text>
+                </View>
+              )}
             </View>
           </Animated.View>
 

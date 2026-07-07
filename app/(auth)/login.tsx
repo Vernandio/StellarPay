@@ -11,9 +11,11 @@ import {
   ScrollView,
   Modal,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
@@ -115,13 +117,19 @@ function PinRow({
               style={{
                 width: 50,
                 height: 60,
-                backgroundColor: Colors.baseLight,
-                borderWidth: 1.5,
+                backgroundColor: Colors.surfaceLight,
+                borderWidth: 1,
                 borderColor:
                   filled || active ? Colors.primary : Colors.borderLight,
-                borderRadius: 14,
+                borderRadius: 12,
                 alignItems: "center",
                 justifyContent: "center",
+                ...(filled || active ? {
+                  shadowColor: Colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 16,
+                } : {})
               }}
             >
               <Text
@@ -155,28 +163,32 @@ function PinRow({
         style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
       />
 
-      <Pressable
+      <TouchableOpacity
         onPress={onSubmit}
         disabled={!complete || isLoading}
         style={{
-          height: 58,
-          borderRadius: 18,
+          backgroundColor: "#111111",
+          borderRadius: 24,
+          height: 56,
           justifyContent: "center",
           alignItems: "center",
-          backgroundColor: "#000",
           opacity: !complete || isLoading ? 0.4 : 1,
         }}
+        activeOpacity={0.8}
       >
         {isLoading ? (
           <ActivityIndicator color={Colors.white} />
         ) : (
           <Text
-            style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}
+            style={[
+              Typography.labelLarge,
+              { color: Colors.white, fontWeight: "700", fontSize: 16 },
+            ]}
           >
             {submitLabel}
           </Text>
         )}
-      </Pressable>
+      </TouchableOpacity>
     </Animated.View>
   );
 }
@@ -321,8 +333,13 @@ export default function LoginScreen() {
   // Render
   // ─────────────────────────────────────────────────────────────────────
   return (
-    <View style={{ flex: 1, backgroundColor: "#000000" }}>
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
+      <LinearGradient
+        colors={["#000000", "#111111", Colors.baseLight]}
+        locations={[0, 0.6, 1]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 380 }}
+      />
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           // Android's window already resizes for the keyboard (adjustResize).
           // Adding behavior="height" here double-compensates and shoved the CTA
@@ -361,7 +378,7 @@ export default function LoginScreen() {
                   } else
                     router.canGoBack()
                       ? router.back()
-                      : router.replace("/(auth)/login");
+                      : router.replace("/(auth)/landing");
                 }}
                 style={{ padding: Spacing.xs, marginRight: Spacing.md }}
               >
@@ -401,17 +418,15 @@ export default function LoginScreen() {
           <Animated.View
             entering={FadeInDown.duration(400).delay(250).springify()}
             style={{
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.surfaceLight,
+              borderWidth: 0.5,
+              borderColor: Colors.borderLight,
               borderTopLeftRadius: 32,
               borderTopRightRadius: 32,
               paddingTop: Spacing.xl,
               paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -12 },
-              shadowOpacity: 0.04,
-              shadowRadius: 24,
-              elevation: 8,
+              shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8,
               flex: 1,
             }}
           >
@@ -476,46 +491,43 @@ export default function LoginScreen() {
                     style={{
                       fontFamily: "Inter-Regular",
                       fontSize: 16,
-                      backgroundColor: Colors.baseLight,
-                      borderWidth: 1.5,
+                      backgroundColor: Colors.surfaceLight,
+                      borderWidth: 1,
                       borderColor: Colors.borderLight,
-                      borderRadius: 16,
-                      height: 58,
+                      borderRadius: 12,
+                      height: 56,
                       paddingHorizontal: Spacing.md,
                       color: Colors.textLightPrimary,
                       marginBottom: Spacing.lg,
                     }}
                   />
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleResolve}
                     onPressIn={() =>
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     }
                     disabled={isLoading}
-                    style={({ pressed }) => ({
-                      height: 58,
-                      borderRadius: 18,
+                    style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
+                      height: 56,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
-                      opacity: isLoading || pressed ? 0.7 : 1,
                       flexDirection: "row",
                       gap: 10,
-                    })}
+                      opacity: isLoading ? 0.6 : 1,
+                    }}
+                    activeOpacity={0.8}
                   >
                     {isLoading ? (
-                      <Text
-                        style={[Typography.labelLarge, { color: Colors.white }]}
-                      >
-                        Looking up…
-                      </Text>
+                      <ActivityIndicator color={Colors.white} />
                     ) : (
                       <>
                         <Text
                           style={[
                             Typography.labelLarge,
-                            { color: Colors.white, fontSize: 16 },
+                            { color: Colors.white, fontWeight: "700", fontSize: 16 },
                           ]}
                         >
                           Continue
@@ -523,6 +535,20 @@ export default function LoginScreen() {
                         <Feather name="arrow-right" size={18} color="#FFF" />
                       </>
                     )}
+                  </TouchableOpacity>
+                  
+                  <Pressable
+                    onPress={() => router.push("/(auth)/signup")}
+                    style={{ alignSelf: "center", marginTop: Spacing.xl, padding: Spacing.sm }}
+                  >
+                    <Text
+                      style={[
+                        Typography.bodyMedium,
+                        { color: Colors.textLightSecondary },
+                      ]}
+                    >
+                      Don't have an account? <Text style={{ color: Colors.primary, fontWeight: "600" }}>Sign up</Text>
+                    </Text>
                   </Pressable>
                 </Animated.View>
               )}
@@ -596,40 +622,37 @@ export default function LoginScreen() {
                     </Text>
                   </Text>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleForgotSend}
                     disabled={isLoading}
-                    style={({ pressed }) => ({
-                      height: 58,
-                      borderRadius: 18,
+                    style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
+                      height: 56,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
-                      opacity: isLoading || pressed ? 0.7 : 1,
                       flexDirection: "row",
                       gap: 10,
-                    })}
+                      opacity: isLoading ? 0.6 : 1,
+                    }}
+                    activeOpacity={0.8}
                   >
                     {isLoading ? (
-                      <Text
-                        style={[Typography.labelLarge, { color: Colors.white }]}
-                      >
-                        Sending…
-                      </Text>
+                      <ActivityIndicator color={Colors.white} />
                     ) : (
                       <>
                         <Feather name="mail" size={18} color="#FFF" />
                         <Text
                           style={[
                             Typography.labelLarge,
-                            { color: Colors.white, fontSize: 16 },
+                            { color: Colors.white, fontWeight: "700", fontSize: 16 },
                           ]}
                         >
                           Send Reset Code
                         </Text>
                       </>
                     )}
-                  </Pressable>
+                  </TouchableOpacity>
                 </Animated.View>
               )}
 
@@ -674,14 +697,14 @@ export default function LoginScreen() {
                       fontFamily: "Inter-Regular",
                       fontSize: 22,
                       letterSpacing: 6,
-                      backgroundColor: Colors.baseLight,
-                      borderWidth: 1.5,
+                      backgroundColor: Colors.surfaceLight,
+                      borderWidth: 1,
                       borderColor:
                         forgotOtp.length > 0
                           ? Colors.primary
                           : Colors.borderLight,
-                      borderRadius: 16,
-                      height: 64,
+                      borderRadius: 12,
+                      height: 56,
                       paddingHorizontal: Spacing.md,
                       color: Colors.textLightPrimary,
                       textAlign: "center",
@@ -689,27 +712,32 @@ export default function LoginScreen() {
                     }}
                   />
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleForgotVerify}
                     disabled={isLoading}
-                    style={({ pressed }) => ({
-                      height: 58,
-                      borderRadius: 18,
+                    style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
+                      height: 56,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
-                      opacity: isLoading || pressed ? 0.7 : 1,
-                    })}
+                      opacity: isLoading ? 0.6 : 1,
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        Typography.labelLarge,
-                        { color: Colors.white, fontSize: 16 },
-                      ]}
-                    >
-                      {isLoading ? "Verifying…" : "Verify Code"}
-                    </Text>
-                  </Pressable>
+                    {isLoading ? (
+                      <ActivityIndicator color={Colors.white} />
+                    ) : (
+                      <Text
+                        style={[
+                          Typography.labelLarge,
+                          { color: Colors.white, fontWeight: "700", fontSize: 16 },
+                        ]}
+                      >
+                        Verify Code
+                      </Text>
+                    )}
+                  </TouchableOpacity>
 
                   <Pressable
                     onPress={handleForgotSend}
@@ -746,17 +774,6 @@ export default function LoginScreen() {
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <View
-        style={{
-          backgroundColor: Colors.white,
-          height: 40,
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: -1,
-        }}
-      />
     </View>
   );
 }

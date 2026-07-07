@@ -7,31 +7,7 @@ import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import Animated, { FadeIn, FadeOut, Layout } from "react-native-reanimated";
 
-type ActivityType = "sent" | "received" | "swap";
-
-interface Activity {
-  id: string;
-  type: ActivityType;
-  title: string;
-  time: string;
-  amountPrimary: string;
-  amountSecondary?: string;
-  icon: any;
-  isPositive: boolean;
-  dateSection: string;
-  extra?: string;
-}
-
-const ACTIVITIES: Activity[] = [
-  { id: "1", type: "sent", title: "To Sarah", time: "9:20 AM", amountPrimary: "- $25.00", amountSecondary: "- 12.50 USDC", icon: "user", isPositive: false, dateSection: "Today" },
-  { id: "2", type: "sent", title: "Starbucks", time: "8:45 AM", amountPrimary: "- $6.80", amountSecondary: "- 6.80 USDC", icon: "coffee", isPositive: false, dateSection: "Today" },
-  { id: "3", type: "sent", title: "Paid to Coffee House", time: "7:30 AM", amountPrimary: "- 15.25 USDC", amountSecondary: "- 15.25 USDC", icon: "shopping-bag", isPositive: false, dateSection: "Today", extra: "via QRIS" },
-  { id: "4", type: "received", title: "Received from Alex", time: "3:40 PM", amountPrimary: "+ $50.00", amountSecondary: "+ 25.00 USDC", icon: "arrow-down", isPositive: true, dateSection: "Yesterday" },
-  { id: "5", type: "swap", title: "Swap USDC → XLM", time: "1:10 PM", amountPrimary: "+ 25.00 XLM", amountSecondary: "+ $24.80", icon: "refresh-cw", isPositive: true, dateSection: "Yesterday" },
-  { id: "6", type: "sent", title: "Grab", time: "12:15 PM", amountPrimary: "- 12.40 USDC", amountSecondary: "via SGQR", icon: "navigation", isPositive: false, dateSection: "Yesterday" },
-  { id: "7", type: "sent", title: "Sent to Michael", time: "9:15 PM", amountPrimary: "- $30.00", amountSecondary: "- 15.00 USDC", icon: "user", isPositive: false, dateSection: "Jun 6, 2025" },
-  { id: "8", type: "sent", title: "Lazada", time: "6:45 PM", amountPrimary: "- $21.30", amountSecondary: "- 21.30 USDC", icon: "shopping-cart", isPositive: false, dateSection: "Jun 6, 2025", extra: "via PromptPay" },
-];
+import { useTransactions } from "../../src/hooks/useTransactions";
 
 export default function ActivityScreen() {
   const [filter, setFilter] = useState<"All" | "Sent" | "Received">("All");
@@ -39,9 +15,10 @@ export default function ActivityScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilter, setDateFilter] = useState<"All" | "Today" | "Yesterday" | "Older">("All");
+  const { activities, isLoading } = useTransactions();
 
   const filteredActivities = useMemo(() => {
-    return ACTIVITIES.filter(item => {
+    return activities.filter(item => {
       // Type Filter
       if (filter === "Sent" && item.type !== "sent") return false;
       if (filter === "Received" && item.type !== "received") return false;
@@ -71,7 +48,7 @@ export default function ActivityScreen() {
     }
     acc[curr.dateSection].push(curr);
     return acc;
-  }, {} as Record<string, Activity[]>);
+  }, {} as Record<string, any[]>);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.baseLight }} edges={["top"]}>
@@ -136,9 +113,12 @@ export default function ActivityScreen() {
           ))}
         </View>
 
-        {/* List */}
         <Animated.View layout={Layout.springify()}>
-          {Object.entries(groupedActivities).length === 0 ? (
+          {isLoading ? (
+            <View style={{ alignItems: "center", marginTop: Spacing.xxl }}>
+              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Loading transactions...</Text>
+            </View>
+          ) : Object.entries(groupedActivities).length === 0 ? (
             <View style={{ alignItems: "center", marginTop: Spacing.xxl }}>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>No transactions found.</Text>
             </View>

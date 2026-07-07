@@ -17,6 +17,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   FadeInRight,
   FadeOutLeft,
@@ -362,7 +363,7 @@ export default function SignUpScreen() {
             : () =>
                 router.canGoBack()
                   ? router.back()
-                  : router.replace("/(auth)/login")
+                  : router.replace("/(auth)/landing")
         }
         style={{ padding: Spacing.xs, marginRight: Spacing.md }}
       >
@@ -388,8 +389,14 @@ export default function SignUpScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#000000" }}>
-      <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
+    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
+      <LinearGradient
+        colors={["#000000", "#111111", Colors.baseLight]}
+        locations={[0, 0.6, 1]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: 380 }}
+      />
+      
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           style={{ flex: 1, justifyContent: "space-between" }}
@@ -458,17 +465,15 @@ export default function SignUpScreen() {
           <Animated.View
             entering={FadeInDown.duration(400).delay(300).springify()}
             style={{
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.surfaceLight,
+              borderWidth: 0.5,
+              borderColor: Colors.borderLight,
               borderTopLeftRadius: 32,
               borderTopRightRadius: 32,
               paddingTop: Spacing.xl,
               paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: -12 },
-              shadowOpacity: 0.03,
-              shadowRadius: 24,
-              elevation: 8,
+              shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8,
               zIndex: 10,
               flex: 1, // Make card take remaining space naturally
             }}
@@ -546,10 +551,10 @@ export default function SignUpScreen() {
                       style={{
                         fontFamily: "Inter-Regular",
                         fontSize: 16,
-                        backgroundColor: Colors.baseLight,
+                        backgroundColor: Colors.surfaceLight,
                         borderWidth: 1,
                         borderColor: Colors.borderLight,
-                        borderRadius: 16,
+                        borderRadius: 12,
                         height: 56,
                         paddingHorizontal: Spacing.md,
                         color: Colors.textLightPrimary,
@@ -583,12 +588,12 @@ export default function SignUpScreen() {
                       style={{
                         fontFamily: "Inter-Regular",
                         fontSize: 16,
-                        backgroundColor: Colors.baseLight,
+                        backgroundColor: Colors.surfaceLight,
                         borderWidth: 1,
                         borderColor: fieldErrors.username
                           ? Colors.danger
                           : Colors.borderLight,
-                        borderRadius: 16,
+                        borderRadius: 12,
                         height: 56,
                         paddingHorizontal: Spacing.md,
                         color: Colors.textLightPrimary,
@@ -637,12 +642,12 @@ export default function SignUpScreen() {
                       style={{
                         fontFamily: "Inter-Regular",
                         fontSize: 16,
-                        backgroundColor: Colors.baseLight,
+                        backgroundColor: Colors.surfaceLight,
                         borderWidth: 1,
                         borderColor: fieldErrors.email
                           ? Colors.danger
                           : Colors.borderLight,
-                        borderRadius: 16,
+                        borderRadius: 12,
                         height: 56,
                         paddingHorizontal: Spacing.md,
                         color: Colors.textLightPrimary,
@@ -685,12 +690,12 @@ export default function SignUpScreen() {
                         style={{
                           flexDirection: "row",
                           alignItems: "center",
-                          backgroundColor: Colors.baseLight,
+                          backgroundColor: Colors.surfaceLight,
                           borderWidth: 1,
                           borderColor: fieldErrors.phone
                             ? Colors.danger
                             : Colors.borderLight,
-                          borderRadius: 16,
+                          borderRadius: 12,
                           height: 56,
                           paddingHorizontal: Spacing.md,
                           marginRight: Spacing.sm,
@@ -726,12 +731,12 @@ export default function SignUpScreen() {
                           flex: 1,
                           fontFamily: "Inter-Regular",
                           fontSize: 16,
-                          backgroundColor: Colors.baseLight,
+                          backgroundColor: Colors.surfaceLight,
                           borderWidth: 1,
                           borderColor: fieldErrors.phone
                             ? Colors.danger
                             : Colors.borderLight,
-                          borderRadius: 16,
+                          borderRadius: 12,
                           height: 56,
                           paddingHorizontal: Spacing.md,
                           color: Colors.textLightPrimary,
@@ -754,30 +759,57 @@ export default function SignUpScreen() {
                     )}
                   </View>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleSendOtp}
                     onPressIn={() =>
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     }
                     disabled={isLoading}
                     style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
                       height: 56,
-                      borderRadius: 9999,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
                       opacity: isLoading ? 0.6 : 1,
                     }}
+                    activeOpacity={0.8}
                   >
                     {isLoading ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
                       <Text
-                        style={[Typography.labelLarge, { color: Colors.white }]}
+                        style={[
+                          Typography.labelLarge,
+                          { color: Colors.white, fontWeight: "700", fontSize: 16 },
+                        ]}
                       >
                         Continue
                       </Text>
                     )}
+                  </TouchableOpacity>
+
+                  <Pressable
+                    onPress={() => router.push("/(auth)/login")}
+                    style={{
+                      alignSelf: "center",
+                      marginTop: Spacing.xl,
+                      padding: Spacing.sm,
+                    }}
+                  >
+                    <Text
+                      style={[
+                        Typography.bodyMedium,
+                        { color: Colors.textLightSecondary },
+                      ]}
+                    >
+                      Already have an account?{" "}
+                      <Text
+                        style={{ color: Colors.primary, fontWeight: "600" }}
+                      >
+                        Sign in
+                      </Text>
+                    </Text>
                   </Pressable>
                 </Animated.View>
               )}
@@ -831,7 +863,7 @@ export default function SignUpScreen() {
                           fontWeight: "700",
                           width: 45,
                           height: 60,
-                          backgroundColor: Colors.baseLight,
+                          backgroundColor: Colors.surfaceLight,
                           borderWidth: 1,
                           borderColor: digit
                             ? Colors.primary
@@ -839,36 +871,48 @@ export default function SignUpScreen() {
                           borderRadius: 12,
                           textAlign: "center",
                           color: Colors.textLightPrimary,
+                          ...(digit
+                            ? {
+                                shadowColor: Colors.primary,
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 16,
+                              }
+                            : {}),
                         }}
                       />
                     ))}
                   </View>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleVerifyOtp}
                     onPressIn={() =>
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     }
                     disabled={isLoading}
                     style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
                       height: 56,
-                      borderRadius: 9999,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
                       opacity: isLoading ? 0.6 : 1,
                     }}
+                    activeOpacity={0.8}
                   >
                     {isLoading ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
                       <Text
-                        style={[Typography.labelLarge, { color: Colors.white }]}
+                        style={[
+                          Typography.labelLarge,
+                          { color: Colors.white, fontWeight: "700", fontSize: 16 },
+                        ]}
                       >
                         Verify OTP
                       </Text>
                     )}
-                  </Pressable>
+                  </TouchableOpacity>
                 </Animated.View>
               )}
 
@@ -922,7 +966,7 @@ export default function SignUpScreen() {
                           fontWeight: "700",
                           width: 50,
                           height: 60,
-                          backgroundColor: Colors.baseLight,
+                          backgroundColor: Colors.surfaceLight,
                           borderWidth: 1,
                           borderColor: digit
                             ? Colors.primary
@@ -930,36 +974,48 @@ export default function SignUpScreen() {
                           borderRadius: 12,
                           textAlign: "center",
                           color: Colors.textLightPrimary,
+                          ...(digit
+                            ? {
+                                shadowColor: Colors.primary,
+                                shadowOffset: { width: 0, height: 4 },
+                                shadowOpacity: 0.15,
+                                shadowRadius: 16,
+                              }
+                            : {}),
                         }}
                       />
                     ))}
                   </View>
 
-                  <Pressable
+                  <TouchableOpacity
                     onPress={handleSignUp}
                     onPressIn={() =>
                       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
                     }
                     disabled={isLoading}
                     style={{
+                      backgroundColor: "#111111",
+                      borderRadius: 24,
                       height: 56,
-                      borderRadius: 9999,
                       justifyContent: "center",
                       alignItems: "center",
-                      backgroundColor: "#000",
                       opacity: isLoading ? 0.6 : 1,
                     }}
+                    activeOpacity={0.8}
                   >
                     {isLoading ? (
                       <ActivityIndicator color={Colors.white} />
                     ) : (
                       <Text
-                        style={[Typography.labelLarge, { color: Colors.white }]}
+                        style={[
+                          Typography.labelLarge,
+                          { color: Colors.white, fontWeight: "700", fontSize: 16 },
+                        ]}
                       >
                         Finish & Create Account
                       </Text>
                     )}
-                  </Pressable>
+                  </TouchableOpacity>
                 </Animated.View>
               )}
             </ScrollView>
@@ -982,7 +1038,7 @@ export default function SignUpScreen() {
         >
           <View
             style={{
-              backgroundColor: Colors.white,
+              backgroundColor: Colors.surfaceLight,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               padding: Spacing.lg,
@@ -1055,18 +1111,6 @@ export default function SignUpScreen() {
           </View>
         </View>
       </Modal>
-
-      <View
-        style={{
-          backgroundColor: Colors.white,
-          height: 40,
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          zIndex: -1,
-        }}
-      />
     </View>
   );
 }

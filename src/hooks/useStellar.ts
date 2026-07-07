@@ -58,7 +58,7 @@ export const useStellar = () => {
       });
       return hash;
     } catch (err: any) {
-      setError(err.message || "Payment failed");
+      console.error("STELLAR ERR", err.response?.data?.extras?.result_codes || err); setError(err.message || "Payment failed");
       throw err;
     } finally {
       setIsProcessing(false);

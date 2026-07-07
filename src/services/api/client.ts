@@ -18,7 +18,7 @@ if (hostUri) {
   }
 }
 
-const DEV_API_URL = `http://${localIp}:5000`;
+const DEV_API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${localIp}:5001`;
 const PROD_API_URL = "https://api.stellarpay.com";
 
 const API_BASE = __DEV__ ? DEV_API_URL : PROD_API_URL;

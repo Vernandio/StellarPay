@@ -5,10 +5,12 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useState, useRef, useCallback, useEffect } from "react";
 import * as Haptics from "expo-haptics";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { ActivityIndicator, Alert } from "react-native";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES } from "../src/constants/currencies";
+import { useStellar } from "../src/hooks/useStellar";
 
 const { height } = Dimensions.get("window");
 
@@ -22,6 +24,8 @@ export default function SendScreen() {
   const [receiveCurrency, setReceiveCurrency] = useState(CURRENCIES[1] || CURRENCIES[0]);
   const [activeSelector, setActiveSelector] = useState<"send" | "receive">("send");
   
+  const { send, isProcessing } = useStellar();
+  
   const amountInputRef = useRef<TextInput>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
 
@@ -31,10 +35,6 @@ export default function SendScreen() {
     }, 400);
     return () => clearTimeout(timer);
   }, []);
-
-  // Mock rate for UI
-  const mockRate = 0.7745;
-  const receiveAmount = amount ? (parseFloat(amount) * mockRate).toFixed(2) : "0.00";
 
   const handleAmountChange = (text: string) => {
     const cleaned = text.replace(/[^0-9.]/g, "");
@@ -47,8 +47,33 @@ export default function SendScreen() {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       return;
     }
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    router.back();
+    
+    if (!params.publicKey) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Error", "Recipient has not set up a Stellar wallet yet.");
+      return;
+    }
+    
+    try {
+      // Assuming currency.code can be mapped, or default to USDC
+      const asset = currency.code === "USDC" ? "USDC" : "XLM"; 
+      
+      const txHash = await send(params.publicKey as string, amount, asset, message);
+      
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace({
+        pathname: "/transfer-success",
+        params: {
+          amount,
+          currency: currency.code,
+          name: params.name,
+          hash: txHash
+        }
+      });
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Transfer Failed", err.message || "Something went wrong.");
+    }
   };
 
   const renderBackdrop = useCallback(
@@ -125,7 +150,7 @@ export default function SendScreen() {
               {/* They Receive */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>They will receive</Text>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
-                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>{receiveAmount}</Text>
+                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>{amount ? parseFloat(amount).toFixed(2) : "0.00"}</Text>
                 <TouchableOpacity 
                   onPress={() => {
                     Keyboard.dismiss();
@@ -138,10 +163,6 @@ export default function SendScreen() {
                   <Feather name="chevron-down" size={16} color={Colors.textLightPrimary} />
                 </TouchableOpacity>
               </View>
-              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>
-                Rate 1 {currency.code} = {mockRate} {receiveCurrency.code}
-              </Text>
-
               <View style={{ height: 1, backgroundColor: Colors.borderLight, marginBottom: Spacing.lg }} />
 
               {/* Message */}
@@ -171,11 +192,15 @@ export default function SendScreen() {
                 borderRadius: 24,
                 paddingVertical: 18,
                 alignItems: "center",
-                opacity: amount && parseFloat(amount) > 0 ? 1 : 0.5,
+                opacity: (amount && parseFloat(amount) > 0) || isProcessing ? 1 : 0.5,
               }}
-              disabled={!amount || parseFloat(amount) <= 0}
+              disabled={!amount || parseFloat(amount) <= 0 || isProcessing}
             >
-              <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Send</Text>
+              {isProcessing ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Send</Text>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
