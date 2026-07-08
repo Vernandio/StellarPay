@@ -42,7 +42,8 @@ export const useStellar = () => {
     destinationAddress: string,
     amount: string,
     asset: "XLM" | "USDC" = "USDC",
-    memo?: string
+    memo?: string,
+    destinationUid?: string
   ) => {
     if (!user || !publicKey) throw new Error("Wallet not initialized");
     setIsProcessing(true);
@@ -55,6 +56,7 @@ export const useStellar = () => {
         amount,
         asset,
         memo,
+        destinationUid,
       });
       return hash;
     } catch (err: any) {

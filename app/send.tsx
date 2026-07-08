@@ -110,7 +110,8 @@ export default function SendScreen() {
         params.publicKey as string,
         usdAmount,
         "USDC",
-        message
+        message,
+        ((params.uid || params.id) as string) || undefined
       );
 
       // Save transaction record to Firestore
@@ -128,8 +129,10 @@ export default function SendScreen() {
           hash: txHash,
           senderUid: profile?.uid || "",
           senderUsername: profile?.username || "",
+          senderDisplayName: profile?.displayName || "",
           receiverUid,
           receiverUsername,
+          receiverDisplayName: (params.name as string) || "",
           amountUSD: usdAmount,
           displayCurrency: receiveCurrency.code,
           displayAmount: convertedAmount,

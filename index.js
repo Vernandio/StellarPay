@@ -113,13 +113,16 @@ if (typeof global.MessageEvent === "undefined") {
 
 // 8. Patch fetch to stringify URLSearchParams (feaxios bug in React Native)
 const originalFetch = global.fetch;
-global.fetch = function(url, options) {
+global.fetch = function(...args) {
+  const url = args[0];
+  const options = args[1];
   if (options && options.body && typeof options.body === 'object') {
     if (options.body.constructor && options.body.constructor.name === 'URLSearchParams') {
       options.body = options.body.toString();
+      args[1] = options; // update options in args
     }
   }
-  return originalFetch(url, options);
+  return originalFetch.apply(this, args);
 };
 
 require("expo-router/entry");

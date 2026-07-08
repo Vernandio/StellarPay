@@ -3,7 +3,11 @@ import {
 } from "@stellar/stellar-sdk";
 import { loadAccount } from "./client";
 import { ACTIVE_NETWORK, USDC_ASSET, APP_MEMO_PREFIX } from "../../constants/stellar";
-import { loadKeypairFromSecureStore } from "./wallet";
+import {
+  loadKeypairFromSecureStore,
+  setupUSDCTrustline,
+  checkUSDCTrustlineExists,
+} from "./wallet";
 import { Buffer } from "buffer";
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -47,10 +51,22 @@ const submitTxToHorizon = async (tx: any): Promise<string> => {
 
   if (!response.ok) {
     console.error("HORIZON ERR:", JSON.stringify(data));
+    const opCodes: string[] = data?.extras?.result_codes?.operations ?? [];
+    let friendly: string | null = null;
+    if (opCodes.includes("op_underfunded")) {
+      friendly = "Insufficient balance to send this amount. Deposit funds and try again.";
+    } else if (opCodes.includes("op_src_no_trust")) {
+      friendly = "Your wallet isn't set up for USD yet. Please try again.";
+    } else if (opCodes.includes("op_no_trust")) {
+      friendly = "The recipient's wallet can't receive USD yet. Ask them to open StellarPay once, then retry.";
+    } else if (opCodes.includes("op_no_destination")) {
+      friendly = "The recipient's wallet doesn't exist on the network yet.";
+    }
     throw new Error(
-      data?.extras?.result_codes
-        ? `Stellar tx failed: ${JSON.stringify(data.extras.result_codes)}`
-        : data?.detail || `Horizon returned ${response.status}`
+      friendly ??
+        (data?.extras?.result_codes
+          ? `Stellar tx failed: ${JSON.stringify(data.extras.result_codes)}`
+          : data?.detail || `Horizon returned ${response.status}`)
     );
   }
 
@@ -67,6 +83,7 @@ export const sendPayment = async ({
   amount,
   asset = "USDC",
   memo,
+  destinationUid,
 }: {
   senderUid: string;
   senderPublicKey: string;
@@ -74,9 +91,33 @@ export const sendPayment = async ({
   amount: string;
   asset?: "XLM" | "USDC";
   memo?: string;
+  destinationUid?: string;
 }): Promise<string> => {
   const keypair = await loadKeypairFromSecureStore(senderUid);
   if (!keypair) throw new Error("Wallet keypair not found");
+
+  // Preflight: an account can only hold/send the asset with a trustline, but
+  // createWallet doesn't establish one — repair on the fly instead of letting
+  // Horizon reject with op_src_no_trust / op_no_trust. Must happen before
+  // loadAccount below, since the trustline tx bumps the sequence number.
+  if (asset === "USDC") {
+    if (!(await checkUSDCTrustlineExists(senderPublicKey))) {
+      console.log(`Sender missing ${USDC_ASSET.code} trustline — creating it`);
+      await setupUSDCTrustline(senderUid, senderPublicKey);
+    }
+    if (!(await checkUSDCTrustlineExists(destinationAddress))) {
+      // Sandbox-only convenience: wallet keys are backed up to Firestore for
+      // cross-device testing, so we can establish the recipient's trustline
+      // on their behalf too.
+      if (!destinationUid) {
+        throw new Error(
+          "The recipient's wallet can't receive USD yet. Ask them to open StellarPay once, then retry."
+        );
+      }
+      console.log(`Recipient missing ${USDC_ASSET.code} trustline — creating it`);
+      await setupUSDCTrustline(destinationUid, destinationAddress);
+    }
+  }
 
   const account = await loadAccount(senderPublicKey);
 
