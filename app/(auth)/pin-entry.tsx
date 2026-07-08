@@ -9,11 +9,12 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import Animated, { FadeInDown } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeIn } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
@@ -24,21 +25,155 @@ import { signOut } from "../../src/services/firebase/auth";
 import { auth } from "../../src/services/firebase/config";
 import { getUserProfile, UserProfile } from "../../src/services/firebase/firestore";
 
+const { width } = Dimensions.get("window");
+
+function PinRow({
+  value,
+  onChangeText,
+  onComplete,
+  label,
+  sublabel,
+  onSubmit,
+  submitLabel,
+  isLoading,
+  autoFocus,
+}: {
+  value: string;
+  onChangeText: (code: string) => void;
+  onComplete: (code: string) => void;
+  label: string;
+  sublabel: string;
+  onSubmit: () => void;
+  submitLabel: string;
+  isLoading: boolean;
+  autoFocus?: boolean;
+}) {
+  const inputRef = useRef<TextInput>(null);
+  const complete = value.length === 6;
+
+  useEffect(() => {
+    if (!autoFocus) return;
+    const t = setTimeout(() => inputRef.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, [autoFocus]);
+
+  return (
+    <Animated.View entering={FadeIn.duration(250)}>
+      <Text
+        style={[
+          Typography.headingLarge,
+          { color: Colors.textLightPrimary, marginBottom: Spacing.xs },
+        ]}
+      >
+        {label}
+      </Text>
+      <Text
+        style={[
+          Typography.bodyMedium,
+          { color: Colors.textLightSecondary, marginBottom: Spacing.xl },
+        ]}
+      >
+        {sublabel}
+      </Text>
+
+      <Pressable
+        onPress={() => inputRef.current?.focus()}
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          marginBottom: Spacing.xl,
+        }}
+      >
+        {Array.from({ length: 6 }).map((_, i) => {
+          const filled = i < value.length;
+          const active = i === value.length;
+          return (
+            <View
+              key={i}
+              style={{
+                width: 50,
+                height: 60,
+                backgroundColor: Colors.surfaceLight,
+                borderWidth: 1,
+                borderColor:
+                  filled || active ? Colors.primary : Colors.borderLight,
+                borderRadius: 12,
+                alignItems: "center",
+                justifyContent: "center",
+                ...(filled || active ? {
+                  shadowColor: Colors.primary,
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.15,
+                  shadowRadius: 16,
+                } : {})
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: 28,
+                  fontWeight: "700",
+                  color: Colors.textLightPrimary,
+                }}
+              >
+                {filled ? "•" : ""}
+              </Text>
+            </View>
+          );
+        })}
+      </Pressable>
+
+      <TextInput
+        ref={inputRef}
+        value={value}
+        onChangeText={(t) => {
+          const digits = t.replace(/\D/g, "").slice(0, 6);
+          onChangeText(digits);
+          if (digits.length === 6) onComplete(digits);
+        }}
+        keyboardType="number-pad"
+        maxLength={6}
+        editable={!isLoading}
+        textContentType="oneTimeCode"
+        caretHidden
+        style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+      />
+
+      <TouchableOpacity
+        onPress={onSubmit}
+        disabled={!complete || isLoading}
+        style={{
+          backgroundColor: "#111111",
+          borderRadius: 24,
+          height: 56,
+          justifyContent: "center",
+          alignItems: "center",
+          opacity: !complete || isLoading ? 0.4 : 1,
+        }}
+        activeOpacity={0.8}
+      >
+        {isLoading ? (
+          <ActivityIndicator color={Colors.white} />
+        ) : (
+          <Text
+            style={[
+              Typography.labelLarge,
+              { color: Colors.white, fontWeight: "700", fontSize: 16 },
+            ]}
+          >
+            {submitLabel}
+          </Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
+  );
+}
+
 export default function PinEntryScreen() {
-  const [pin, setPin] = useState(["", "", "", "", "", ""]);
+  const [pin, setPin] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
-
-  const pinRefs = [
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-    useRef<TextInput>(null),
-  ];
 
   useEffect(() => {
     (async () => {
@@ -56,54 +191,6 @@ export default function PinEntryScreen() {
     })();
   }, []);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      pinRefs[0].current?.focus();
-    }, 400);
-    return () => clearTimeout(timer);
-  }, []);
-
-  const handlePinChange = async (text: string, index: number) => {
-    let newPinArray = [...pin];
-
-    if (text.length > 1) {
-      const pastedData = text
-        .replace(/[^0-9]/g, "")
-        .slice(0, 6)
-        .split("");
-      pastedData.forEach((char, i) => {
-        if (index + i < 6) {
-          newPinArray[index + i] = char;
-        }
-      });
-      setPin(newPinArray);
-      const nextIndex = Math.min(index + pastedData.length, 5);
-      setTimeout(() => pinRefs[nextIndex].current?.focus(), 0);
-    } else {
-      newPinArray[index] = text;
-      setPin(newPinArray);
-
-      // If text entered, focus next input
-      if (text && index < 5) {
-        setTimeout(() => pinRefs[index + 1].current?.focus(), 0);
-      }
-    }
-
-    // Trigger verification if all 6 digits are entered
-    if (newPinArray.join("").length === 6) {
-      await verifyCode(newPinArray.join(""));
-    }
-  };
-
-  const handlePinKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === "Backspace" && !pin[index] && index > 0) {
-      const arr = [...pin];
-      arr[index - 1] = "";
-      setPin(arr);
-      setTimeout(() => pinRefs[index - 1].current?.focus(), 0);
-    }
-  };
-
   const verifyCode = async (enteredPin: string) => {
     setIsLoading(true);
     setError(null);
@@ -120,8 +207,7 @@ export default function PinEntryScreen() {
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(err.message || "Incorrect PIN code. Please try again.");
-      setPin(["", "", "", "", "", ""]);
-      pinRefs[0].current?.focus();
+      setPin("");
     } finally {
       setIsLoading(false);
     }
@@ -138,10 +224,9 @@ export default function PinEntryScreen() {
   };
 
   const accountLabel = profile?.email || profile?.username || auth.currentUser?.email || null;
-  const pinComplete = pin.join("").length === 6;
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
+    <View style={{ flex: 1, backgroundColor: Colors.base }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -152,7 +237,12 @@ export default function PinEntryScreen() {
             entering={FadeInDown.duration(400).delay(100)}
             style={{ flex: 0.6, position: "relative" }}
           >
-            {/* Background Globe - Absolute positioned behind everything */}
+            <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.xl, paddingTop: Spacing.lg }}>
+              <View style={{ width: 40 }} />
+              <View style={{ flex: 1 }} />
+              <View style={{ width: 40 }} />
+            </View>
+
             <View
               style={{
                 position: "absolute",
@@ -167,92 +257,28 @@ export default function PinEntryScreen() {
               <Image
                 source={require("../../assets/images/globe.png")}
                 style={{
-                  width: Dimensions.get("window").width,
-                  height: 400,
-                  opacity: 0.7,
+                  width,
+                  height: 380,
+                  opacity: 0.65,
                   resizeMode: "cover",
                 }}
               />
-            </View>
-
-            {/* Title / Logo */}
-            <View style={{ alignItems: "center", paddingTop: Spacing.xxl }}>
-              <Feather
-                name="lock"
-                size={56}
-                color={Colors.white}
-                style={{ marginBottom: Spacing.md }}
-              />
-              <Text
-                style={{
-                  fontSize: 32,
-                  fontWeight: "800",
-                  color: Colors.white,
-                  marginBottom: Spacing.xs,
-                  letterSpacing: -0.5,
-                }}
-              >
-                Enter Security PIN
-              </Text>
-
-              {profileLoading ? (
-                <ActivityIndicator color="Colors.textLightSecondary" style={{ marginTop: Spacing.xs }} />
-              ) : (
-                <>
-                  <Text
-                    style={[
-                      Typography.bodyLarge,
-                      {
-                        color: Colors.textLightSecondary,
-                        textAlign: "center",
-                        paddingHorizontal: Spacing.xl,
-                      },
-                    ]}
-                  >
-                    Confirm your identity to access your wallet
-                  </Text>
-                  {accountLabel && (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        marginTop: Spacing.sm,
-                        backgroundColor: Colors.borderLightStrong,
-                        paddingHorizontal: Spacing.md,
-                        paddingVertical: Spacing.xs,
-                        borderRadius: 999,
-                      }}
-                    >
-                      <Feather name="user" size={13} color={Colors.textLightPrimary} style={{ marginRight: 6 }} />
-                      <Text
-                        style={[
-                          Typography.bodySmall,
-                          { color: Colors.textLightPrimary, fontWeight: "600" },
-                        ]}
-                      >
-                        {accountLabel}
-                      </Text>
-                    </View>
-                  )}
-                </>
-              )}
             </View>
           </Animated.View>
 
           {/* Bottom Card */}
           <Animated.View
-            entering={FadeInDown.duration(400).delay(300).springify()}
+            entering={FadeInDown.duration(400).delay(250).springify()}
             style={{
               backgroundColor: Colors.surfaceLight,
               borderWidth: 0.5,
               borderColor: Colors.borderLight,
               borderTopLeftRadius: 32,
               borderTopRightRadius: 32,
-              paddingTop: Spacing.xxl,
+              paddingTop: Spacing.xl,
               paddingHorizontal: Spacing.xl,
               paddingBottom: Spacing.xxl,
               shadowColor: "#000", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.05, shadowRadius: 24, elevation: 8,
-              zIndex: 10,
               flex: 1,
             }}
           >
@@ -273,82 +299,22 @@ export default function PinEntryScreen() {
               </Animated.View>
             )}
 
-            <View style={{ flex: 1, justifyContent: "center" }}>
-              <View
-                style={{
-                  flexDirection: "row",
-                  justifyContent: "space-between",
-                  marginBottom: Spacing.xl,
-                }}
-              >
-                {pin.map((digit, index) => (
-                  <TextInput
-                    key={index}
-                    ref={pinRefs[index]}
-                    value={digit}
-                    onChangeText={(text) => handlePinChange(text, index)}
-                    onKeyPress={(e) => handlePinKeyPress(e, index)}
-                    keyboardType="number-pad"
-                    maxLength={1}
-                    secureTextEntry
-                    editable={!isLoading}
-                    style={{
-                      fontSize: 28,
-                      fontWeight: "700",
-                      width: 50,
-                      height: 60,
-                      backgroundColor: Colors.surfaceLight,
-                      borderWidth: 1,
-                      borderColor: digit ? Colors.primary : Colors.borderLight,
-                      borderRadius: 12,
-                      textAlign: "center",
-                      color: Colors.textLightPrimary,
-                      ...(digit ? {
-                        shadowColor: Colors.primary,
-                        shadowOffset: { width: 0, height: 4 },
-                        shadowOpacity: 0.15,
-                        shadowRadius: 16,
-                      } : {})
-                    }}
-                  />
-                ))}
-              </View>
-
-              <Pressable
-                onPress={() => verifyCode(pin.join(""))}
-                disabled={!pinComplete || isLoading}
-                style={({ pressed }) => ({
-                  borderRadius: 9999,
-                  overflow: "hidden",
-                  opacity: !pinComplete || isLoading ? 0.4 : (pressed ? 0.9 : 1),
-                  shadowColor: Colors.primary,
-                  shadowOffset: { width: 0, height: 8 },
-                  shadowOpacity: isLoading ? 0 : (pressed ? 0.4 : 0.2),
-                  shadowRadius: 24,
-                  marginBottom: Spacing.md,
-                })}
-              >
-                <LinearGradient
-                  colors={[Colors.primary, Colors.primaryDark]}
-                  style={{
-                    height: 56,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  {isLoading ? (
-                    <ActivityIndicator color={Colors.white} />
-                  ) : (
-                    <Text style={[Typography.labelLarge, { color: Colors.white, fontSize: 16 }]}>
-                      Unlock
-                    </Text>
-                  )}
-                </LinearGradient>
-              </Pressable>
+            <View style={{ flex: 1 }}>
+              <PinRow
+                value={pin}
+                onChangeText={setPin}
+                onComplete={verifyCode}
+                label="Enter your PIN 🔒"
+                sublabel={accountLabel ? `Signing in as ${accountLabel}` : "Confirm your identity"}
+                onSubmit={() => verifyCode(pin)}
+                submitLabel="Unlock"
+                isLoading={isLoading}
+                autoFocus
+              />
 
               <Pressable
                 onPress={handleLogout}
-                style={{ alignSelf: "center", padding: Spacing.md }}
+                style={{ alignSelf: "center", marginTop: Spacing.xl, padding: Spacing.sm }}
               >
                 <Text
                   style={[

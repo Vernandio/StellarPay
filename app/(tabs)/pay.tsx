@@ -14,6 +14,7 @@ import { CURRENCIES, Currency } from "../../src/constants/currencies";
 import QRCode from "react-native-qrcode-svg";
 import { fetchExchangeRates, ExchangeRates } from "../../src/services/exchangeRates";
 import { createPaymentRequest } from "../../src/services/firebase/requests";
+import { useWallet } from "../../src/hooks/useWallet";
 
 export default function PayScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
@@ -21,6 +22,7 @@ export default function PayScreen() {
   const { profile } = useAuthStore();
   const requestQRSheetRef = useRef<BottomSheetModal>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
+  const { usdcBalance } = useWallet();
 
   const [requestAmount, setRequestAmount] = useState("");
   const [requestNotes, setRequestNotes] = useState("");
@@ -147,8 +149,12 @@ export default function PayScreen() {
                 <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>USDC (Stellar)</Text>
               </View>
               <View style={{ alignItems: "flex-end", marginRight: Spacing.sm }}>
-                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>832.50</Text>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>≈ $832.50</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>
+                  {parseFloat(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                  ≈ ${parseFloat(usdcBalance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
               </View>
               <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
             </Pressable>

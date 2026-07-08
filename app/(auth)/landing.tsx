@@ -1,19 +1,42 @@
-import { View, Text, TouchableOpacity, Image, Dimensions, StyleSheet } from "react-native";
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, Image, Dimensions, ScrollView, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
-import Animated, { FadeInDown, FadeInUp, FadeIn } from "react-native-reanimated";
+import Animated, { FadeInDown, FadeInUp } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Spacing } from "../../src/constants/spacing";
-import { Typography } from "../../src/constants/typography";
 
 const { width, height } = Dimensions.get("window");
 
 const BTN_HEIGHT = 56;
 const BTN_RADIUS = 24;
 
+const features = [
+  {
+    title: "Smooth &\nFrictionless",
+    description: "Experience instant, borderless payments that feel just like your favorite fintech app."
+  },
+  {
+    title: "Scan, Tap,\nand Pay",
+    description: "Checkout seamlessly using QR codes or tap-to-pay NFC at your local merchants."
+  },
+  {
+    title: "Pay by\nUsername",
+    description: "Forget complex wallet addresses. Send money globally using just a simple username."
+  }
+];
+
 export default function LandingScreen() {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const slideSize = event.nativeEvent.layoutMeasurement.width;
+    const index = event.nativeEvent.contentOffset.x / slideSize;
+    setActiveIndex(Math.round(index));
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#000000" }}>
       
@@ -28,7 +51,7 @@ export default function LandingScreen() {
       <SafeAreaView style={{ flex: 1, zIndex: 1 }} edges={["top", "bottom"]}>
         
         {/* ── Top Section: Logo & Text ── */}
-        <View style={{ flex: 1, paddingHorizontal: Spacing.xl }}>
+        <View style={{ flex: 1 }}>
           
           {/* Logo Header */}
           <Animated.View 
@@ -42,35 +65,63 @@ export default function LandingScreen() {
           {/* Spacer to push text down */}
           <View style={{ flex: 1 }} />
 
-          {/* Heading Text */}
+          {/* Carousel Text */}
           <Animated.View 
             entering={FadeInDown.duration(600).delay(300)}
-            style={{ alignItems: "center", paddingBottom: Spacing.xxl * 2 }}
+            style={{ paddingBottom: Spacing.xxl }}
           >
-            <Text
-              style={{
-                fontSize: 36,
-                fontWeight: "700",
-                color: "#FFFFFF",
-                textAlign: "center",
-                lineHeight: 42,
-                letterSpacing: -1,
-                marginBottom: Spacing.md,
-              }}
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onScroll={handleScroll}
+              scrollEventThrottle={16}
             >
-              Move Money{"\n"}Across the World
-            </Text>
-            <Text
-              style={{
-                fontSize: 15,
-                color: "rgba(255, 255, 255, 0.7)",
-                textAlign: "center",
-                lineHeight: 22,
-                paddingHorizontal: Spacing.lg,
-              }}
-            >
-              Fast, secure, and borderless payments{"\n"}powered by the Stellar network.
-            </Text>
+              {features.map((feature, index) => (
+                <View key={index} style={{ width, alignItems: "center" }}>
+                  <Text
+                    style={{
+                      fontSize: 36,
+                      fontWeight: "700",
+                      color: "#FFFFFF",
+                      textAlign: "center",
+                      lineHeight: 42,
+                      letterSpacing: -1,
+                      marginBottom: Spacing.md,
+                    }}
+                  >
+                    {feature.title}
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      color: "rgba(255, 255, 255, 0.7)",
+                      textAlign: "center",
+                      lineHeight: 22,
+                      paddingHorizontal: Spacing.xl,
+                    }}
+                  >
+                    {feature.description}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+
+            {/* Pagination Dots */}
+            <View style={{ flexDirection: "row", justifyContent: "center", marginTop: Spacing.xl }}>
+              {features.map((_, index) => (
+                <View
+                  key={index}
+                  style={{
+                    width: activeIndex === index ? 24 : 8,
+                    height: 8,
+                    borderRadius: 4,
+                    backgroundColor: activeIndex === index ? "#FFFFFF" : "rgba(255, 255, 255, 0.3)",
+                    marginHorizontal: 4,
+                  }}
+                />
+              ))}
+            </View>
           </Animated.View>
         </View>
 

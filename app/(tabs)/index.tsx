@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -49,6 +49,16 @@ export default function WalletScreen() {
 
   const pinSheetRef = useRef<PinVerifySheetRef>(null);
   const navigation = useNavigation();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await Promise.all([
+      refreshBalances(),
+      fetchTransactions()
+    ]);
+    setRefreshing(false);
+  }, [refreshBalances, fetchTransactions]);
 
   // Refresh balances & transaction history whenever the screen is focused
   useEffect(() => {
@@ -262,7 +272,13 @@ export default function WalletScreen() {
       />
 
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
-        <ScrollView contentContainerStyle={{ paddingBottom: 120 }} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          contentContainerStyle={{ paddingBottom: 120 }} 
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.white} />
+          }
+        >
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(300).delay(0)} style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm }}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>

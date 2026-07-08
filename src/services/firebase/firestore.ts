@@ -59,6 +59,12 @@ export const getUserByPhone = async (phone: string): Promise<UserProfile | null>
   return snap.empty ? null : (snap.docs[0].data() as UserProfile);
 };
 
+export const getUserByPublicKey = async (publicKey: string): Promise<UserProfile | null> => {
+  const q = query(collection(db, "users"), where("stellarPublicKey", "==", publicKey.trim()), limit(1));
+  const snap = await getDocs(q);
+  return snap.empty ? null : (snap.docs[0].data() as UserProfile);
+};
+
 export const searchUser = async (queryStr: string): Promise<UserProfile | null> => {
   const cleanQuery = queryStr.trim().toLowerCase();
   if (!cleanQuery) return null;

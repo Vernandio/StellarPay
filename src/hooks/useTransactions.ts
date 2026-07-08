@@ -18,6 +18,9 @@ export interface Activity {
   isPositive: boolean;
   dateSection: string;
   extra?: string;
+  hash?: string;
+  memo?: string;
+  destinationAddress?: string;
 }
 
 export const useTransactions = () => {
@@ -150,7 +153,8 @@ export const useTransactions = () => {
             dateSection,
             extra,
             hash: record.transaction_hash,
-            memo: dbRecord ? dbRecord.memo : "",
+            memo: dbRecord?.memo,
+            destinationAddress: isSender ? record.to : undefined,
           };
         });
 

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Share } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Share, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
@@ -17,7 +17,14 @@ export default function ActivityScreen() {
   const [showSearch, setShowSearch] = useState(false);
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [dateFilter, setDateFilter] = useState<"All" | "Today" | "Yesterday" | "Older">("All");
-  const { activities, isLoading } = useTransactions();
+  const { activities, isLoading, fetchTransactions } = useTransactions();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchTransactions();
+    setRefreshing(false);
+  }, [fetchTransactions]);
 
   const detailSheetRef = useRef<BottomSheetModal>(null);
   const [selectedTx, setSelectedTx] = useState<Activity | null>(null);
@@ -76,7 +83,7 @@ export default function ActivityScreen() {
       }
       return true;
     });
-  }, [filter, searchQuery, dateFilter]);
+  }, [activities, filter, searchQuery, dateFilter]);
 
   // Group by dateSection
   const groupedActivities = filteredActivities.reduce((acc, curr) => {
@@ -89,7 +96,13 @@ export default function ActivityScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.baseLight }} edges={["top"]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        contentContainerStyle={{ paddingBottom: 120, paddingHorizontal: Spacing.lg, paddingTop: Spacing.md }} 
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />
+        }
+      >
         
         {/* Header */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xl }}>

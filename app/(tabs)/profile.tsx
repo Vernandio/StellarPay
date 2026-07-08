@@ -13,12 +13,14 @@ import { truncateAddress } from "../../src/utils/format";
 import { signOut } from "../../src/services/firebase/auth";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useState, useRef, useCallback } from "react";
+import * as Clipboard from "expo-clipboard";
 import { CURRENCIES, getCurrencyByCode } from "../../src/constants/currencies";
 
 export default function ProfileScreen() {
   const { profile } = useAuth();
   const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
   const currencySheetRef = useRef<BottomSheetModal>(null);
+  const [isCardHidden, setIsCardHidden] = useState(true);
 
   const handleSignOut = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -70,15 +72,34 @@ export default function ProfileScreen() {
           
           {/* Stellar Account Card */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-            <View>
+            <View style={{ flex: 1, paddingRight: Spacing.md }}>
               <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>Stellar Account</Text>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, letterSpacing: 1 }]}>
-                {publicKey ? truncateAddress(publicKey) : "GB...Z3YB"}
+                {publicKey ? (isCardHidden ? truncateAddress(publicKey) : publicKey) : "GB...Z3YB"}
               </Text>
             </View>
-            <Pressable style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center" }}>
-              <Feather name="copy" size={18} color={Colors.textLightPrimary} />
-            </Pressable>
+            <View style={{ flexDirection: "row", gap: Spacing.sm }}>
+              <TouchableOpacity 
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center" }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  setIsCardHidden(!isCardHidden);
+                }}
+              >
+                <Feather name={isCardHidden ? "eye" : "eye-off"} size={18} color={Colors.textLightPrimary} />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center" }}
+                onPress={async () => {
+                  if (publicKey) {
+                    await Clipboard.setStringAsync(publicKey);
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+                }}
+              >
+                <Feather name="copy" size={18} color={Colors.textLightPrimary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Stellar Card */}
