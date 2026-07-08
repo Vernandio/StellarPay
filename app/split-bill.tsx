@@ -7,9 +7,12 @@ import * as Haptics from "expo-haptics";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
-import { searchUser } from "../src/services/firebase/firestore";
+import { searchUser, getSuggestedFriends } from "../src/services/firebase/firestore";
+import { useAuthStore } from "../src/store/authStore";
+import { Friend } from "../src/types";
 
 export default function SplitBillScreen() {
+  const { profile } = useAuthStore();
   const insets = useSafeAreaInsets();
   const searchInputRef = useRef<TextInput>(null);
 
@@ -52,7 +55,7 @@ export default function SplitBillScreen() {
               handle: `@${found.username}`,
               avatar: (found.displayName || found.username).charAt(0).toUpperCase(),
               color: "#7B61FF",
-            }
+            },
           ]);
         } else {
           setSearchResults([]);
@@ -66,20 +69,17 @@ export default function SplitBillScreen() {
     performSearch();
   }, [debouncedSearch]);
 
-  const suggestedFriends = [
-    { id: "1", name: "Alex Chen", handle: "@alex", avatar: "A", color: "#FF6B6B" },
-    { id: "2", name: "Sarah Miller", handle: "@sarahm", avatar: "S", color: "#4ECDC4" },
-    { id: "3", name: "David Kim", handle: "@davidk", avatar: "D", color: "#45B7D1" },
-    { id: "4", name: "Emma Watson", handle: "@emmaw", avatar: "E", color: "#9B59B6" },
-  ];
+  const [suggestedFriends, setSuggestedFriends] = useState<Friend[]>([]);
+
+  useEffect(() => {
+    if (profile?.uid) {
+      getSuggestedFriends(profile.uid).then(setSuggestedFriends).catch(console.error);
+    }
+  }, [profile?.uid]);
 
   const handleSelectFriend = (contact: any) => {
     Haptics.selectionAsync();
-    setSelectedFriends(prev => 
-      prev.some(f => f.id === contact.id)
-        ? prev.filter(f => f.id !== contact.id)
-        : [...prev, contact]
-    );
+    setSelectedFriends((prev) => (prev.some((f) => f.id === contact.id) ? prev.filter((f) => f.id !== contact.id) : [...prev, contact]));
   };
 
   const handleContinue = () => {
@@ -87,13 +87,13 @@ export default function SplitBillScreen() {
     router.push({
       pathname: "/request",
       params: {
-        group: JSON.stringify(selectedFriends)
-      }
+        group: JSON.stringify(selectedFriends),
+      },
     });
   };
 
   const listToRender = search.trim() ? searchResults : suggestedFriends;
-  const isSelected = (id: string) => selectedFriends.some(f => f.id === id);
+  const isSelected = (id: string) => selectedFriends.some((f) => f.id === id);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
@@ -101,7 +101,21 @@ export default function SplitBillScreen() {
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, height: 56 }}>
-            <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.white, justifyContent: "center", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{
+                width: 40,
+                height: 40,
+                borderRadius: 20,
+                backgroundColor: Colors.white,
+                justifyContent: "center",
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 8,
+              }}
+            >
               <Feather name="arrow-left" size={20} color={Colors.textLightPrimary} />
             </TouchableOpacity>
             <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 20 }]}>Split Bill</Text>
@@ -110,7 +124,21 @@ export default function SplitBillScreen() {
 
           {/* Search Bar */}
           <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: Spacing.lg }}>
-            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.md, height: 50, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                paddingHorizontal: Spacing.md,
+                height: 50,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
               <Feather name="search" size={20} color={Colors.textLightSecondary} style={{ marginRight: Spacing.sm }} />
               <TextInput
                 ref={searchInputRef}
@@ -136,14 +164,32 @@ export default function SplitBillScreen() {
               {search ? "Search Results" : "Suggested"}
             </Text>
 
-            <View style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.sm, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+            <View
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                padding: Spacing.sm,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
               {listToRender.map((contact, index) => {
                 const selected = isSelected(contact.id);
                 return (
-                  <TouchableOpacity 
-                    key={contact.id} 
+                  <TouchableOpacity
+                    key={contact.id}
                     onPress={() => handleSelectFriend(contact)}
-                    style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, borderBottomWidth: index === listToRender.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: Spacing.md,
+                      paddingHorizontal: Spacing.sm,
+                      borderBottomWidth: index === listToRender.length - 1 ? 0 : 1,
+                      borderBottomColor: Colors.borderLight,
+                    }}
                   >
                     <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color || "#7B61FF", justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
                       <Text style={[Typography.headingMedium, { color: Colors.white }]}>{contact.avatar}</Text>
@@ -152,7 +198,18 @@ export default function SplitBillScreen() {
                       <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>
                       <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{contact.handle}</Text>
                     </View>
-                    <View style={{ width: 24, height: 24, borderRadius: 12, borderWidth: selected ? 0 : 2, borderColor: Colors.border, backgroundColor: selected ? "#111111" : "transparent", justifyContent: "center", alignItems: "center" }}>
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        borderWidth: selected ? 0 : 2,
+                        borderColor: Colors.border,
+                        backgroundColor: selected ? "#111111" : "transparent",
+                        justifyContent: "center",
+                        alignItems: "center",
+                      }}
+                    >
                       {selected && <Feather name="check" size={14} color={Colors.white} />}
                     </View>
                   </TouchableOpacity>
@@ -169,7 +226,18 @@ export default function SplitBillScreen() {
 
           {/* Sticky Continue Button */}
           {selectedFriends.length > 0 && (
-            <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: "rgba(242, 244, 247, 0.9)" }}>
+            <View
+              style={{
+                position: "absolute",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                paddingHorizontal: Spacing.lg,
+                paddingBottom: Math.max(insets.bottom, Spacing.lg),
+                paddingTop: Spacing.md,
+                backgroundColor: "rgba(242, 244, 247, 0.9)",
+              }}
+            >
               <TouchableOpacity
                 onPress={handleContinue}
                 style={{
@@ -179,9 +247,7 @@ export default function SplitBillScreen() {
                   alignItems: "center",
                 }}
               >
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>
-                  Continue ({selectedFriends.length})
-                </Text>
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Continue ({selectedFriends.length})</Text>
               </TouchableOpacity>
             </View>
           )}

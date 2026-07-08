@@ -13,12 +13,7 @@ import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES, Currency } from "../src/constants/currencies";
 import { useStellar } from "../src/hooks/useStellar";
 import { useAuthStore } from "../src/store/authStore";
-import {
-  fetchExchangeRates,
-  convertUSDTo,
-  formatRateDisplay,
-  ExchangeRates,
-} from "../src/services/exchangeRates";
+import { fetchExchangeRates, convertUSDTo, formatRateDisplay, ExchangeRates } from "../src/services/exchangeRates";
 import { saveTransaction } from "../src/services/firebase/transactions";
 import { createNotification } from "../src/services/firebase/notifications";
 import { getUserByUsername } from "../src/services/firebase/firestore";
@@ -34,11 +29,7 @@ export default function SendScreen() {
 
   const [amount, setAmount] = useState((params.amount as string) || "");
   const [message, setMessage] = useState((params.memo as string) || "");
-  const [receiveCurrency, setReceiveCurrency] = useState<Currency>(
-    params.currencyCode
-      ? CURRENCIES.find((c) => c.code === params.currencyCode) || CURRENCIES[0]
-      : CURRENCIES[0]
-  );
+  const [receiveCurrency, setReceiveCurrency] = useState<Currency>(params.currencyCode ? CURRENCIES.find((c) => c.code === params.currencyCode) || CURRENCIES[0] : CURRENCIES[0]);
   const [rates, setRates] = useState<ExchangeRates | null>(null);
   const [ratesLoading, setRatesLoading] = useState(true);
 
@@ -86,9 +77,7 @@ export default function SendScreen() {
   })();
 
   /** Rate display text */
-  const rateText = rates
-    ? formatRateDisplay(receiveCurrency.code as keyof ExchangeRates, rates)
-    : "";
+  const rateText = rates ? formatRateDisplay(receiveCurrency.code as keyof ExchangeRates, rates) : "";
 
   const executeSend = async () => {
     if (!amount || parseFloat(amount) <= 0) {
@@ -106,18 +95,12 @@ export default function SendScreen() {
       // Always send USD amount on-chain
       const usdAmount = parseFloat(amount).toFixed(7);
 
-      const txHash = await send(
-        params.publicKey as string,
-        usdAmount,
-        "USDC",
-        message,
-        ((params.uid || params.id) as string) || undefined
-      );
+      const txHash = await send(params.publicKey as string, usdAmount, "USDC", message, ((params.uid || params.id) as string) || undefined);
 
       // Save transaction record to Firestore
       try {
         const targetUid = (params.uid || params.id) as string;
-        const recipientUsername = (params.handle as string)?.replace('@', '') || '';
+        const recipientUsername = (params.handle as string)?.replace("@", "") || "";
         const receiverProfile = targetUid
           ? null // We already have the info from params
           : await getUserByUsername(recipientUsername);
@@ -196,25 +179,27 @@ export default function SendScreen() {
     // Dismiss keyboard and remove focus from text inputs
     Keyboard.dismiss();
     amountInputRef.current?.blur();
-    
+
     // Open PIN sheet before executing
     pinSheetRef.current?.present();
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
-    ),
-    []
-  );
+  const renderBackdrop = useCallback((props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-
           {/* Header */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, height: 56 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingHorizontal: Spacing.lg,
+              height: 56,
+            }}
+          >
             <TouchableOpacity onPress={() => router.back()} style={{ width: 44, height: 44, justifyContent: "center", alignItems: "flex-start" }}>
               <Feather name="chevron-left" size={28} color={Colors.textLightPrimary} />
             </TouchableOpacity>
@@ -222,16 +207,22 @@ export default function SendScreen() {
             <View style={{ width: 44 }} />
           </View>
 
-          <ScrollView
-            contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Recipient Section */}
             <View style={{ marginTop: Spacing.lg, marginBottom: Spacing.xl }}>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>To</Text>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: (params.color as string) || Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                <View
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 28,
+                    backgroundColor: (params.color as string) || Colors.baseLight,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginRight: Spacing.md,
+                  }}
+                >
                   <Text style={[Typography.headingLarge, { color: Colors.white }]}>{params.avatar || "U"}</Text>
                 </View>
                 <View>
@@ -242,14 +233,31 @@ export default function SendScreen() {
             </View>
 
             {/* Main Form Card */}
-            <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
-
+            <View
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 24,
+                padding: Spacing.xl,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 12,
+                elevation: 3,
+              }}
+            >
               {/* You Send (USD only) */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>You send</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.lg }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: Spacing.lg,
+                }}
+              >
                 <TextInput
                   ref={amountInputRef}
-                  value={amount}
+                  value={parseFloat(amount).toFixed(2)}
                   onChangeText={handleAmountChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
@@ -258,7 +266,17 @@ export default function SendScreen() {
                   selectionColor={Colors.teal}
                 />
                 {/* USD is fixed — no selector */}
-                <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: 99, marginLeft: Spacing.sm }}>
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: Colors.baseLight,
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: Spacing.sm,
+                    borderRadius: 99,
+                    marginLeft: Spacing.sm,
+                  }}
+                >
                   <Text style={{ fontSize: 16, marginRight: Spacing.xs }}>🇺🇸</Text>
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>USD</Text>
                 </View>
@@ -268,18 +286,32 @@ export default function SendScreen() {
 
               {/* They Receive (selectable currency) */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>They will receive</Text>
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xs }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: Spacing.xs,
+                }}
+              >
                 <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>
-                  {receiveCurrency.code === "USD"
-                    ? (amount ? parseFloat(amount).toFixed(2) : "0.00")
-                    : convertedAmount}
+                  {receiveCurrency.code === "USD" ? (amount ? parseFloat(amount).toFixed(2) : "0.00") : convertedAmount}
                 </Text>
                 <TouchableOpacity
                   onPress={() => {
                     Keyboard.dismiss();
                     currencySheetRef.current?.present();
                   }}
-                  style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: 99, marginLeft: Spacing.sm, minHeight: 44 }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    backgroundColor: Colors.baseLight,
+                    paddingHorizontal: Spacing.md,
+                    paddingVertical: Spacing.sm,
+                    borderRadius: 99,
+                    marginLeft: Spacing.sm,
+                    minHeight: 44,
+                  }}
                 >
                   <Text style={{ fontSize: 16, marginRight: Spacing.xs }}>{receiveCurrency.flag}</Text>
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: Spacing.xs }]}>{receiveCurrency.code}</Text>
@@ -290,11 +322,18 @@ export default function SendScreen() {
               {/* Exchange Rate Info */}
               {receiveCurrency.code !== "USD" && rateText ? (
                 <Animated.View entering={FadeIn.duration(300)} style={{ marginBottom: Spacing.lg }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, padding: Spacing.md, borderRadius: 12, marginTop: Spacing.sm }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      backgroundColor: Colors.baseLight,
+                      padding: Spacing.md,
+                      borderRadius: 12,
+                      marginTop: Spacing.sm,
+                    }}
+                  >
                     <Feather name="trending-up" size={16} color={Colors.teal} style={{ marginRight: Spacing.sm }} />
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, flex: 1 }]}>
-                      {rateText}
-                    </Text>
+                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, flex: 1 }]}>{rateText}</Text>
                     {ratesLoading && <ActivityIndicator size="small" color={Colors.textLightSecondary} />}
                   </View>
                 </Animated.View>
@@ -319,11 +358,17 @@ export default function SendScreen() {
                 selectionColor={Colors.teal}
               />
             </View>
-
           </ScrollView>
 
           {/* Bottom Action Bar */}
-          <View style={{ paddingHorizontal: Spacing.lg, paddingBottom: Math.max(insets.bottom, Spacing.lg), paddingTop: Spacing.md, backgroundColor: Colors.baseLight }}>
+          <View
+            style={{
+              paddingHorizontal: Spacing.lg,
+              paddingBottom: Math.max(insets.bottom, Spacing.lg),
+              paddingTop: Spacing.md,
+              backgroundColor: Colors.baseLight,
+            }}
+          >
             <TouchableOpacity
               onPress={handleSend}
               style={{
@@ -335,11 +380,7 @@ export default function SendScreen() {
               }}
               disabled={!amount || parseFloat(amount) <= 0 || isProcessing}
             >
-              {isProcessing ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Send</Text>
-              )}
+              {isProcessing ? <ActivityIndicator color={Colors.white} /> : <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Send</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -355,9 +396,7 @@ export default function SendScreen() {
       >
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
           <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Recipient Currency</Text>
-          <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: Spacing.lg, marginTop: -Spacing.sm }]}>
-            Select how the recipient sees the amount
-          </Text>
+          <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: Spacing.lg, marginTop: -Spacing.sm }]}>Select how the recipient sees the amount</Text>
           {CURRENCIES.map((c) => (
             <TouchableOpacity
               key={c.code}
@@ -366,10 +405,27 @@ export default function SendScreen() {
                 Haptics.selectionAsync();
                 currencySheetRef.current?.dismiss();
               }}
-              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, borderBottomWidth: 1, borderBottomColor: Colors.borderLight, minHeight: 56 }}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingVertical: Spacing.md,
+                borderBottomWidth: 1,
+                borderBottomColor: Colors.borderLight,
+                minHeight: 56,
+              }}
               activeOpacity={0.7}
             >
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+              <View
+                style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 22,
+                  backgroundColor: Colors.baseLight,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginRight: Spacing.md,
+                }}
+              >
                 <Text style={{ fontSize: 20 }}>{c.flag}</Text>
               </View>
               <View style={{ flex: 1 }}>
@@ -384,9 +440,7 @@ export default function SendScreen() {
                   }).format(rates[c.code as keyof ExchangeRates] || 0)}
                 </Text>
               )}
-              {receiveCurrency.code === c.code && (
-                <Feather name="check" size={24} color={Colors.teal} />
-              )}
+              {receiveCurrency.code === c.code && <Feather name="check" size={24} color={Colors.teal} />}
             </TouchableOpacity>
           ))}
         </BottomSheetView>

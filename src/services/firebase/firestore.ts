@@ -132,3 +132,45 @@ export const subscribeToTransactions = (
     cb(snap.docs.map((d) => d.data() as TransactionCache))
   );
 };
+
+import { Friend } from "../../types";
+
+export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
+  const q = query(
+    collection(db, "transactions"),
+    where("uid", "==", uid),
+    orderBy("createdAt", "desc"),
+    limit(200)
+  );
+  
+  const snap = await getDocs(q);
+  const txs = snap.docs.map(d => d.data() as TransactionCache);
+  
+  const sentTo = new Set<string>();
+  const receivedFrom = new Set<string>();
+  
+  for (const tx of txs) {
+    if (tx.counterpartyUsername) {
+      if (tx.type === "send") sentTo.add(tx.counterpartyUsername.toLowerCase());
+      if (tx.type === "receive") receivedFrom.add(tx.counterpartyUsername.toLowerCase());
+    }
+  }
+  
+  const mutualFriends = [...sentTo].filter(username => receivedFrom.has(username));
+  const friends: Friend[] = [];
+  
+  for (const username of mutualFriends.slice(0, 10)) {
+    const profile = await getUserByUsername(username);
+    if (profile) {
+      friends.push({
+        id: profile.uid,
+        name: profile.displayName || profile.username,
+        handle: `@${profile.username}`,
+        avatar: (profile.displayName || profile.username).charAt(0).toUpperCase(),
+        color: "#7B61FF",
+      });
+    }
+  }
+  
+  return friends;
+};

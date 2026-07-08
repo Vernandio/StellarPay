@@ -8,7 +8,8 @@ import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { useAuthStore } from "../src/store/authStore";
-import { searchUser } from "../src/services/firebase/firestore";
+import { searchUser, getSuggestedFriends } from "../src/services/firebase/firestore";
+import { Friend } from "../src/types";
 
 export default function RequestFriendsScreen() {
   const [search, setSearch] = useState("");
@@ -53,7 +54,7 @@ export default function RequestFriendsScreen() {
               handle: `@${found.username}`,
               avatar: (found.displayName || found.username).charAt(0).toUpperCase(),
               color: "#7B61FF",
-            }
+            },
           ]);
         } else {
           setSearchResults([]);
@@ -67,12 +68,13 @@ export default function RequestFriendsScreen() {
     performSearch();
   }, [debouncedSearch]);
 
-  const suggestedFriends = [
-    { id: "1", name: "Alex Chen", handle: "@alex", avatar: "A", color: "#FF6B6B" },
-    { id: "2", name: "Sarah Miller", handle: "@sarahm", avatar: "S", color: "#4ECDC4" },
-    { id: "3", name: "David Kim", handle: "@davidk", avatar: "D", color: "#45B7D1" },
-    { id: "4", name: "Emma Watson", handle: "@emmaw", avatar: "E", color: "#9B59B6" },
-  ];
+  const [suggestedFriends, setSuggestedFriends] = useState<Friend[]>([]);
+
+  useEffect(() => {
+    if (profile?.uid) {
+      getSuggestedFriends(profile.uid).then(setSuggestedFriends).catch(console.error);
+    }
+  }, [profile?.uid]);
 
   const handleSelectFriend = (contact: any) => {
     Haptics.selectionAsync();
@@ -83,8 +85,8 @@ export default function RequestFriendsScreen() {
         name: contact.name,
         handle: contact.handle,
         avatar: contact.avatar,
-        color: contact.color
-      }
+        color: contact.color,
+      },
     });
   };
 
@@ -93,18 +95,14 @@ export default function RequestFriendsScreen() {
     const username = profile?.username || "user";
     const link = `https://stellarpay.com/send?username=${username}`;
     Clipboard.setString(link);
-    Alert.alert(
-      "Link Copied!",
-      `Your personal request link has been copied to your clipboard:\n\n${link}\n\nShare this link with your friends to receive payments instantly!`,
-      [{ text: "OK" }]
-    );
+    Alert.alert("Link Copied!", `Your personal request link has been copied to your clipboard:\n\n${link}\n\nShare this link with your friends to receive payments instantly!`, [{ text: "OK" }]);
   };
 
   const handleScanQR = () => {
     Haptics.selectionAsync();
     router.push({
       pathname: "/(tabs)/qr",
-      params: { action: "request" }
+      params: { action: "request" },
     });
   };
 
@@ -112,12 +110,19 @@ export default function RequestFriendsScreen() {
     <SafeAreaView style={{ flex: 1, backgroundColor: Colors.baseLight }} edges={["top", "bottom"]}>
       {/* Header */}
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, height: 56 }}>
-        <TouchableOpacity 
-          onPress={() => router.back()} 
-          style={{ 
-            width: 40, height: 40, borderRadius: 20, 
-            backgroundColor: Colors.white, justifyContent: "center", alignItems: "center", 
-            shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: 20,
+            backgroundColor: Colors.white,
+            justifyContent: "center",
+            alignItems: "center",
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 2 },
+            shadowOpacity: 0.05,
+            shadowRadius: 8,
           }}
         >
           <Feather name="arrow-left" size={20} color={Colors.textLightPrimary} />
@@ -127,15 +132,22 @@ export default function RequestFriendsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: Spacing.xxl }}>
-        
         {/* Quick Action Cards */}
         <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.lg, gap: Spacing.md }}>
-          <View style={{ backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+          <View
+            style={{
+              backgroundColor: Colors.white,
+              borderRadius: 20,
+              padding: Spacing.md,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.03,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
             {/* Scan QR */}
-            <TouchableOpacity 
-              onPress={handleScanQR}
-              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}
-            >
+            <TouchableOpacity onPress={handleScanQR} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryGlow, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
                 <Feather name="camera" size={20} color={Colors.primary} />
               </View>
@@ -149,10 +161,7 @@ export default function RequestFriendsScreen() {
             <View style={{ height: 1, backgroundColor: Colors.borderLight, marginVertical: Spacing.sm }} />
 
             {/* Share Link */}
-            <TouchableOpacity 
-              onPress={handleShareLink}
-              style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}
-            >
+            <TouchableOpacity onPress={handleShareLink} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}>
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.tealGlow, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
                 <Feather name="share-2" size={20} color={Colors.teal} />
               </View>
@@ -167,7 +176,21 @@ export default function RequestFriendsScreen() {
 
         {/* Search Bar */}
         <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: Spacing.lg }}>
-          <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.md, height: 50, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: Colors.white,
+              borderRadius: 16,
+              paddingHorizontal: Spacing.md,
+              height: 50,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.03,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
             <Feather name="search" size={20} color={Colors.textLightSecondary} style={{ marginRight: Spacing.sm }} />
             <TextInput
               ref={searchInputRef}
@@ -194,47 +217,60 @@ export default function RequestFriendsScreen() {
             {search ? "Search Results" : "Suggested"}
           </Text>
 
-          <View style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.sm, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
-            {search ? (
-              // Search Results
-              searchResults.map((contact, index) => (
-                <TouchableOpacity 
-                  key={contact.id} 
-                  onPress={() => handleSelectFriend(contact)}
-                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm }}
-                >
-                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                    <Text style={[Typography.headingMedium, { color: Colors.white }]}>{contact.avatar}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>
-                    <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{contact.handle}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
-                </TouchableOpacity>
-              ))
-            ) : (
-              // Suggested Friends
-              suggestedFriends.map((contact, index) => (
-                <TouchableOpacity 
-                  key={contact.id} 
-                  onPress={() => handleSelectFriend(contact)}
-                  style={{ 
-                    flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, 
-                    borderBottomWidth: index === suggestedFriends.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight 
-                  }}
-                >
-                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                    <Text style={[Typography.headingMedium, { color: Colors.white }]}>{contact.avatar}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>
-                    <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{contact.handle}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
-                </TouchableOpacity>
-              ))
-            )}
+          <View
+            style={{
+              backgroundColor: Colors.white,
+              borderRadius: 16,
+              padding: Spacing.sm,
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.03,
+              shadowRadius: 8,
+              elevation: 2,
+            }}
+          >
+            {search
+              ? // Search Results
+                searchResults.map((contact, index) => (
+                  <TouchableOpacity
+                    key={contact.id}
+                    onPress={() => handleSelectFriend(contact)}
+                    style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm }}
+                  >
+                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                      <Text style={[Typography.headingMedium, { color: Colors.white }]}>{contact.avatar}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{contact.handle}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
+                  </TouchableOpacity>
+                ))
+              : // Suggested Friends
+                suggestedFriends.map((contact, index) => (
+                  <TouchableOpacity
+                    key={contact.id}
+                    onPress={() => handleSelectFriend(contact)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      paddingVertical: Spacing.md,
+                      paddingHorizontal: Spacing.sm,
+                      borderBottomWidth: index === suggestedFriends.length - 1 ? 0 : 1,
+                      borderBottomColor: Colors.borderLight,
+                    }}
+                  >
+                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                      <Text style={[Typography.headingMedium, { color: Colors.white }]}>{contact.avatar}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>{contact.handle}</Text>
+                    </View>
+                    <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
+                  </TouchableOpacity>
+                ))}
 
             {search && searchResults.length === 0 && !searchLoading && (
               <View style={{ paddingVertical: Spacing.xxl, alignItems: "center" }}>
@@ -243,7 +279,6 @@ export default function RequestFriendsScreen() {
             )}
           </View>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
