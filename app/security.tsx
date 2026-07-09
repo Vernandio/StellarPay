@@ -8,7 +8,7 @@ import Animated, { FadeIn } from "react-native-reanimated";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
-import { changePin } from "../src/services/api/pin";
+import { changePin, verifyPin } from "../src/services/api/pin";
 
 type Stage = "current" | "new" | "confirm";
 
@@ -71,12 +71,29 @@ export default function SecurityScreen() {
   const newHandlers = makeHandlers(newPin, setNewPin, newRefs);
   const confirmHandlers = makeHandlers(confirmPin, setConfirmPin, confirmRefs);
 
-  const handleCurrentChange = (text: string, index: number) => {
+  const handleCurrentChange = async (text: string, index: number) => {
     const arr = currentHandlers.onChange(text, index);
-    if (arr.join("").length === 6) {
+    const pinStr = arr.join("");
+    if (pinStr.length === 6) {
+      setIsLoading(true);
       setError(null);
-      setStage("new");
-      setTimeout(() => newRefs[0].current?.focus(), 300);
+      try {
+        const isValid = await verifyPin(pinStr);
+        if (isValid) {
+          setStage("new");
+          setTimeout(() => newRefs[0].current?.focus(), 300);
+        } else {
+          setError("Incorrect current PIN");
+          setCurrentPin(emptyPin());
+          currentRefs[0].current?.focus();
+        }
+      } catch (err: any) {
+        setError(err.message || "Incorrect PIN code. Please try again.");
+        setCurrentPin(emptyPin());
+        currentRefs[0].current?.focus();
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 

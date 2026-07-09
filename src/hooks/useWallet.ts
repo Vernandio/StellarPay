@@ -1,7 +1,7 @@
 import { useEffect, useCallback } from "react";
 import { useWalletStore } from "../store/walletStore";
 import { useAuthStore } from "../store/authStore";
-import { getXLMBalance, getUSDCBalance } from "../services/stellar/client";
+import { getXLMBalance, getUSDCBalance, streamPayments } from "../services/stellar/client";
 import { getWallet } from "../services/firebase/firestore";
 
 export const useWallet = () => {
@@ -39,6 +39,18 @@ export const useWallet = () => {
   useEffect(() => {
     refreshBalances();
   }, [refreshBalances]);
+
+  // Realtime balance sync
+  useEffect(() => {
+    if (!publicKey) return;
+    const unsubscribe = streamPayments(publicKey, (payment) => {
+      console.log("New blockchain payment detected, refreshing balance...");
+      refreshBalances();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [publicKey, refreshBalances]);
 
   return { 
     publicKey, xlmBalance, usdcBalance, isLoadingBalance, 

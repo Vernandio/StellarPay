@@ -14,7 +14,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, { FadeInDown, FadeIn, FadeOut } from "react-native-reanimated";
 import * as Haptics from "expo-haptics";
@@ -195,7 +195,8 @@ function PinRow({
 
 export default function LoginScreen() {
   // ── Shared state ──────────────────────────────────────────────────────
-  const [step, setStep] = useState<Step>("identifier");
+  const params = useLocalSearchParams<{ step?: Step }>();
+  const [step, setStep] = useState<Step>((params.step as Step) || "identifier");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -215,7 +216,7 @@ export default function LoginScreen() {
   // ─────────────────────────────────────────────────────────────────────
   const handleResolve = async () => {
     if (!identifier.trim()) {
-      setError("Please enter your email, phone, or username");
+      setError("Please enter your email, username, or phone number");
       return;
     }
     setIsLoading(true);
@@ -223,7 +224,14 @@ export default function LoginScreen() {
     try {
       const result = await resolveUser(identifier.trim());
       setResolvedEmail(result.email ?? "");
-      setStep("pin");
+      
+      const { getUserProfile } = require("../../src/services/firebase/firestore");
+      const profile = await getUserProfile(result.uid);
+      if (profile && profile.hasPin === false) {
+        setStep("forgot_send");
+      } else {
+        setStep("pin");
+      }
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(err.message || "Account not found. Please check your input.");

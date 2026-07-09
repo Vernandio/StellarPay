@@ -1,15 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator, Alert } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system/legacy";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { searchUser, getSuggestedFriends } from "../src/services/firebase/firestore";
 import { useAuthStore } from "../src/store/authStore";
 import { Friend } from "../src/types";
+import { apiClient } from "../src/services/api/client";
 
 export default function SplitBillScreen() {
   const { profile } = useAuthStore();
@@ -21,6 +24,10 @@ export default function SplitBillScreen() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const [selectedFriends, setSelectedFriends] = useState<any[]>([]);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrItems, setOcrItems] = useState<{ name: string; price: number }[]>([]);
+  const [ocrTotal, setOcrTotal] = useState<number | null>(null);
+  const [ocrCurrency, setOcrCurrency] = useState<string>("USD");
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -88,8 +95,51 @@ export default function SplitBillScreen() {
       pathname: "/request",
       params: {
         group: JSON.stringify(selectedFriends),
+        ...(ocrTotal ? { amount: ocrTotal.toString(), currency: ocrCurrency } : {}),
       },
     });
+  };
+
+  const handleScanReceipt = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setOcrLoading(true);
+      const asset = result.assets[0];
+
+      // Read image as base64
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: 'base64',
+      });
+
+      // Call backend OCR endpoint
+      const response = await apiClient.post<{
+        success: boolean;
+        receipt: { items: { name: string; price: number }[]; total: number; currency?: string };
+      }>('/api/ocr/scan-receipt', {
+        image: base64,
+        mimeType: asset.mimeType || 'image/jpeg',
+      });
+
+      if (response.success && response.receipt) {
+        setOcrItems(response.receipt.items || []);
+        setOcrTotal(response.receipt.total || 0);
+        setOcrCurrency(response.receipt.currency || 'USD');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        Alert.alert('Scan Failed', 'Could not extract receipt data from the image.');
+      }
+    } catch (err: any) {
+      console.error('OCR scan error:', err);
+      Alert.alert('Scan Error', err.message || 'Failed to scan receipt.');
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   const listToRender = search.trim() ? searchResults : suggestedFriends;
@@ -144,9 +194,9 @@ export default function SplitBillScreen() {
                 ref={searchInputRef}
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Search user by username/phone/email"
+                placeholder="Search user by username..."
                 placeholderTextColor={Colors.textLightSecondary}
-                style={[Typography.bodyLarge, { flex: 1, color: Colors.textLightPrimary, height: "100%" }]}
+                style={[Typography.bodyMedium, { flex: 1, color: Colors.textLightPrimary, height: "100%", fontSize: 14, letterSpacing: 0 }]}
                 selectionColor={Colors.teal}
               />
               {searchLoading && <ActivityIndicator size="small" color={Colors.teal} style={{ marginRight: Spacing.xs }} />}
@@ -157,6 +207,92 @@ export default function SplitBillScreen() {
               )}
             </View>
           </View>
+
+          {/* AI Receipt Scanner Button */}
+          <TouchableOpacity
+            onPress={handleScanReceipt}
+            disabled={ocrLoading}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: Colors.primary,
+              marginHorizontal: Spacing.lg,
+              marginBottom: Spacing.lg,
+              borderRadius: 16,
+              paddingVertical: Spacing.md,
+              paddingHorizontal: Spacing.lg,
+              shadowColor: Colors.primary,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 12,
+              elevation: 4,
+              opacity: ocrLoading ? 0.7 : 1,
+            }}
+          >
+            {ocrLoading ? (
+              <ActivityIndicator size="small" color={Colors.white} style={{ marginRight: Spacing.sm }} />
+            ) : (
+              <Feather name="camera" size={20} color={Colors.white} style={{ marginRight: Spacing.sm }} />
+            )}
+            <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>
+              {ocrLoading ? "Scanning Receipt..." : "Scan Receipt (AI OCR)"}
+            </Text>
+          </TouchableOpacity>
+
+          {/* OCR Results */}
+          {ocrItems.length > 0 && (
+            <View style={{ marginHorizontal: Spacing.lg, marginBottom: Spacing.lg }}>
+              <View
+                style={{
+                  backgroundColor: Colors.white,
+                  borderRadius: 16,
+                  padding: Spacing.lg,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.03,
+                  shadowRadius: 8,
+                  elevation: 2,
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.md }}>
+                  <Feather name="file-text" size={18} color={Colors.primary} style={{ marginRight: Spacing.sm }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Receipt Items</Text>
+                </View>
+                {ocrItems.map((item, idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      flexDirection: "row",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      paddingVertical: Spacing.sm,
+                      borderBottomWidth: idx === ocrItems.length - 1 ? 0 : 1,
+                      borderBottomColor: Colors.borderLight,
+                    }}
+                  >
+                    <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, flex: 1, marginRight: Spacing.md }]} numberOfLines={2}>{item.name}</Text>
+                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                      {ocrCurrency === "IDR" || ocrCurrency === "VND"
+                        ? item.price.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                        : item.price.toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+                <View style={{ height: 1, backgroundColor: Colors.borderLightStrong, marginVertical: Spacing.md }} />
+                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Total</Text>
+                  <Text style={[Typography.headingMedium, { color: Colors.teal, fontWeight: "800" }]}>
+                    {ocrCurrency} {ocrTotal !== null
+                      ? (ocrCurrency === "IDR" || ocrCurrency === "VND"
+                        ? ocrTotal.toLocaleString(undefined, { maximumFractionDigits: 0 })
+                        : ocrTotal.toFixed(2))
+                      : "0"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* Friends List */}
           <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 120 }} keyboardShouldPersistTaps="handled">

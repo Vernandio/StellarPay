@@ -28,7 +28,7 @@ export default function SendScreen() {
   const { profile } = useAuthStore();
 
   const [amount, setAmount] = useState((params.amount as string) || "");
-  const [message, setMessage] = useState((params.memo as string) || "");
+  const [message, setMessage] = useState("");
   const [receiveCurrency, setReceiveCurrency] = useState<Currency>(params.currencyCode ? CURRENCIES.find((c) => c.code === params.currencyCode) || CURRENCIES[0] : CURRENCIES[0]);
   const [rates, setRates] = useState<ExchangeRates | null>(null);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -232,6 +232,26 @@ export default function SendScreen() {
                 </View>
               </View>
             </View>
+
+            {/* Requester Notes (read-only) */}
+            {params.memo ? (
+              <View
+                style={{
+                  backgroundColor: "rgba(123, 97, 255, 0.06)",
+                  borderRadius: 16,
+                  padding: Spacing.lg,
+                  marginBottom: Spacing.lg,
+                  borderWidth: 1,
+                  borderColor: "rgba(123, 97, 255, 0.15)",
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: Spacing.sm }}>
+                  <Feather name="message-circle" size={16} color={Colors.primary} style={{ marginRight: Spacing.sm }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.primary, fontWeight: "700" }]}>Notes from Requester</Text>
+                </View>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary }]}>{params.memo}</Text>
+              </View>
+            ) : null}
 
             {/* Main Form Card */}
             <View

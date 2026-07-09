@@ -17,6 +17,9 @@ import { isEMVCoQR } from "../../src/utils/emvco";
 import { API_BASE } from "../../src/services/api/client";
 import { doc, getDoc } from "@firebase/firestore";
 import { db } from "../../src/services/firebase/config";
+import ViewShot from "react-native-view-shot";
+import * as Sharing from "expo-sharing";
+import * as MediaLibrary from "expo-media-library";
 
 // ── QR URI scheme ────────────────────────────────────────────────────
 // Format: stellarpay:@username
@@ -62,6 +65,7 @@ export default function QRScreen() {
 
   const { profile } = useAuthStore();
   const navigation = useNavigation();
+  const myQRViewShotRef = useRef<any>(null);
   const searchParams = useLocalSearchParams();
   const action = searchParams.action; // "request" or "send"
 
@@ -74,6 +78,46 @@ export default function QRScreen() {
     });
     return unsubscribe;
   }, [navigation]);
+
+  const getMyQRImageUri = async (): Promise<string | null> => {
+    if (!myQRViewShotRef.current) return null;
+    try {
+      const uri = await myQRViewShotRef.current.capture();
+      return uri;
+    } catch (err) {
+      console.warn("Capture My QR failed:", err);
+      return null;
+    }
+  };
+
+  const handleShareMyQR = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const uri = await getMyQRImageUri();
+    if (!uri) return;
+    try {
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share My QR' });
+    } catch (err) {
+      console.warn('Share QR failed:', err);
+    }
+  };
+
+  const handleSaveMyQR = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const uri = await getMyQRImageUri();
+    if (!uri) return;
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please allow photo library access to save QR codes.');
+        return;
+      }
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Saved!', 'QR code saved to your photo library.');
+    } catch (err) {
+      console.warn('Save QR failed:', err);
+    }
+  };
 
   const handleBarCodeScanned = async ({ data }: { data: string }) => {
     if (scannedRef.current || isLookingUp) return;
@@ -398,7 +442,7 @@ export default function QRScreen() {
         ) : (
           /* ── My QR Tab ─────────────────────────────────────────────── */
           <Animated.View entering={FadeIn} exiting={FadeOut} style={{ alignItems: "center", paddingTop: Spacing.lg }}>
-            <View style={{ backgroundColor: Colors.white, borderRadius: 32, padding: Spacing.xxl, alignItems: "center", width: "100%", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
+            <ViewShot ref={myQRViewShotRef} options={{ format: 'png', quality: 1 }} style={{ backgroundColor: Colors.white, borderRadius: 32, padding: Spacing.xxl, alignItems: "center", width: "100%", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
               {/* User Avatar */}
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: Spacing.lg }}>
                 <Text style={[Typography.headingLarge, { color: Colors.white, fontSize: 24 }]}>
@@ -423,25 +467,19 @@ export default function QRScreen() {
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, textAlign: "center", paddingHorizontal: Spacing.lg }]}>
                 Show this QR code to securely receive funds instantly.
               </Text>
-            </View>
+            </ViewShot>
 
             <View style={{ flexDirection: "row", marginTop: Spacing.xl, gap: Spacing.lg }}>
               <Pressable
                 style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: Colors.white, paddingVertical: Spacing.md, borderRadius: 99, borderWidth: 1, borderColor: Colors.borderLight, minHeight: 44 }}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  Alert.alert("Saved", "QR code saved to your device.");
-                }}
+                onPress={handleSaveMyQR}
               >
                 <Feather name="download" size={20} color={Colors.textLightPrimary} style={{ marginRight: Spacing.sm }} />
                 <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary }]}>Save</Text>
               </Pressable>
               <Pressable
                 style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: Colors.textLightPrimary, paddingVertical: Spacing.md, borderRadius: 99, minHeight: 44 }}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  Alert.alert("Share", "Share sheet will open here.");
-                }}
+                onPress={handleShareMyQR}
               >
                 <Feather name="share-2" size={20} color={Colors.white} style={{ marginRight: Spacing.sm }} />
                 <Text style={[Typography.labelLarge, { color: Colors.white }]}>Share</Text>

@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useImperativeHandle, forwardRef, useRef } from "react";
-import { View, Text, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator, Alert } from "react-native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { router } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import Animated, {
   useSharedValue, useAnimatedStyle, withSequence, withTiming, FadeIn,
@@ -10,7 +11,9 @@ import { Colors } from "../constants/colors";
 import { Spacing } from "../constants/spacing";
 import { Typography } from "../constants/typography";
 import { useAuthStore } from "../store/authStore";
-import { auth } from "../services/firebase/config";
+import { auth, db } from "../services/firebase/config";
+import { doc, updateDoc, deleteDoc } from "@firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE } from "../services/api/client";
 
 interface PinVerifySheetProps {
@@ -64,6 +67,7 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
         const data = await res.json();
 
         if (res.ok && data.valid) {
+          await AsyncStorage.removeItem("failed_pin_attempts");
           setVerified(true);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setTimeout(() => {
@@ -71,21 +75,61 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
             onSuccess();
           }, 600);
         } else {
-          setPin("");
-          setError(data.error || "Incorrect PIN");
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          shakeX.value = withSequence(
-            withTiming(-12, { duration: 50 }),
-            withTiming(12, { duration: 50 }),
-            withTiming(-12, { duration: 50 }),
-            withTiming(12, { duration: 50 }),
-            withTiming(0, { duration: 50 })
-          );
+          throw new Error(data.error || "Incorrect PIN");
         }
-      } catch (err) {
+      } catch (err: any) {
         setPin("");
-        setError("Network error. Try again.");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        shakeX.value = withSequence(
+          withTiming(-12, { duration: 50 }),
+          withTiming(12, { duration: 50 }),
+          withTiming(-12, { duration: 50 }),
+          withTiming(12, { duration: 50 }),
+          withTiming(0, { duration: 50 })
+        );
+
+        // Handle 5 failed attempts
+        try {
+          const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
+          const count = attemptsStr ? parseInt(attemptsStr) : 0;
+          const newCount = count + 1;
+          
+          if (newCount >= 5) {
+            await AsyncStorage.removeItem("failed_pin_attempts");
+            setError("Incorrect PIN. Account locked.");
+            sheetRef.current?.dismiss();
+            
+            if (auth.currentUser?.uid) {
+              const uid = auth.currentUser.uid;
+              // Reset PIN on backend/firestore
+              await Promise.all([
+                updateDoc(doc(db, "users", uid), { hasPin: false }),
+                deleteDoc(doc(db, "users", uid, "security", "pin"))
+              ]);
+            }
+            
+            Alert.alert(
+              "Account Locked & Logged Out",
+              "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
+              [{ 
+                text: "OK", 
+                onPress: async () => {
+                  try {
+                    await auth.signOut();
+                    router.replace("/(auth)/login");
+                  } catch (sErr) {
+                    console.error("Sign out failed from sheet:", sErr);
+                  }
+                } 
+              }]
+            );
+          } else {
+            await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
+            setError(`${err.message || "Incorrect PIN"}. ${5 - newCount} attempts remaining.`);
+          }
+        } catch (innerErr) {
+          setError(err.message || "Incorrect PIN");
+        }
       } finally {
         setIsVerifying(false);
       }

@@ -8,6 +8,8 @@ import healthRoutes from "./routes/healthRoutes";
 import authRoutes from "./routes/authRoutes";
 import pinRoutes from "./routes/pinRoutes";
 import qrRoutes from "./routes/qrRoutes";
+import ratesRoutes from "./routes/ratesRoutes";
+import ocrRoutes from "./routes/ocrRoutes";
 
 const app: Application = express();
 
@@ -23,6 +25,8 @@ app.use("/health", healthRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/pin", pinRoutes);
 app.use("/api/qr", qrRoutes);
+app.use("/api/rates", ratesRoutes);
+app.use("/api/ocr", ocrRoutes);
 
 // Global Error Handler
 app.use(errorHandler);

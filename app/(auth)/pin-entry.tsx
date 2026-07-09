@@ -10,6 +10,9 @@ import {
   Dimensions,
   ActivityIndicator,
   TouchableOpacity,
+  Keyboard,
+  ScrollView,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { router } from "expo-router";
@@ -22,8 +25,10 @@ import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { verifyPin } from "../../src/services/api/pin";
 import { signOut } from "../../src/services/firebase/auth";
-import { auth } from "../../src/services/firebase/config";
+import { auth, db } from "../../src/services/firebase/config";
 import { getUserProfile, UserProfile } from "../../src/services/firebase/firestore";
+import { doc, updateDoc, deleteDoc } from "@firebase/firestore";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get("window");
 
@@ -197,6 +202,7 @@ export default function PinEntryScreen() {
     try {
       const isValid = await verifyPin(enteredPin);
       if (isValid) {
+        await AsyncStorage.removeItem("failed_pin_attempts");
         await Haptics.notificationAsync(
           Haptics.NotificationFeedbackType.Success
         );
@@ -206,7 +212,38 @@ export default function PinEntryScreen() {
       }
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setError(err.message || "Incorrect PIN code. Please try again.");
+      
+      // Handle failed attempts limit (3 strikes)
+      try {
+        const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
+        const count = attemptsStr ? parseInt(attemptsStr) : 0;
+        const newCount = count + 1;
+        if (newCount >= 5) {
+          await AsyncStorage.removeItem("failed_pin_attempts");
+          setError("Incorrect PIN. Account locked.");
+          
+          if (auth.currentUser?.uid) {
+            const uid = auth.currentUser.uid;
+            // Reset PIN on backend/firestore
+            await Promise.all([
+              updateDoc(doc(db, "users", uid), { hasPin: false }),
+              deleteDoc(doc(db, "users", uid, "security", "pin"))
+            ]);
+          }
+          
+          Alert.alert(
+            "Account Locked & Logged Out",
+            "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
+            [{ text: "OK", onPress: () => handleLogout() }]
+          );
+        } else {
+          await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
+          setError(`Incorrect PIN code. ${5 - newCount} attempts remaining.`);
+        }
+      } catch (innerErr) {
+        setError(err.message || "Incorrect PIN code. Please try again.");
+      }
+      
       setPin("");
     } finally {
       setIsLoading(false);
@@ -226,7 +263,7 @@ export default function PinEntryScreen() {
   const accountLabel = profile?.email || profile?.username || auth.currentUser?.email || null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.base }}>
+    <Pressable onPress={() => Keyboard.dismiss()} style={{ flex: 1, backgroundColor: Colors.base }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -299,7 +336,7 @@ export default function PinEntryScreen() {
               </Animated.View>
             )}
 
-            <View style={{ flex: 1 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
               <PinRow
                 value={pin}
                 onChangeText={setPin}
@@ -325,10 +362,10 @@ export default function PinEntryScreen() {
                   Use another account
                 </Text>
               </Pressable>
-            </View>
+            </ScrollView>
           </Animated.View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </View>
+    </Pressable>
   );
 }

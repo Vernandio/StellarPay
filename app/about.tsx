@@ -11,15 +11,15 @@ import { Spacing } from "../src/constants/spacing";
 
 const VERSION = Constants.expoConfig?.version ?? "1.0.0";
 
-const LINKS: { icon: string; title: string; url: string }[] = [
-  { icon: "file-text", title: "Terms of Service", url: "https://stellarpay.app/terms" },
-  { icon: "lock", title: "Privacy Policy", url: "https://stellarpay.app/privacy" },
+const LINKS: { icon: string; title: string; route: string }[] = [
+  { icon: "file-text", title: "Terms of Service", route: "/terms" },
+  { icon: "lock", title: "Privacy Policy", route: "/privacy" },
 ];
 
 export default function AboutScreen() {
-  const open = (url: string) => {
+  const open = (route: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    Linking.openURL(url).catch(() => {});
+    router.push(route as any);
   };
 
   return (
@@ -86,7 +86,7 @@ export default function AboutScreen() {
           {LINKS.map((l, idx) => (
             <Pressable
               key={l.title}
-              onPress={() => open(l.url)}
+              onPress={() => open(l.route)}
               style={{
                 flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, minHeight: 52,
                 borderBottomWidth: idx === LINKS.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight,

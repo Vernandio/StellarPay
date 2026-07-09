@@ -14,6 +14,7 @@ export interface UserProfile {
   displayName: string;
   phone: string | null;
   stellarPublicKey: string | null;
+  avatarUrl?: string;
   authProviders?: string[];
   hasPin?: boolean;
   notificationPrefs?: NotificationPrefs;

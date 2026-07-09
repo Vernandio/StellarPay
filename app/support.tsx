@@ -9,7 +9,7 @@ import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 
-const SUPPORT_EMAIL = "support@stellarpay.app";
+const SUPPORT_EMAIL = "bantuidn@gmail.com";
 
 const FAQ: { q: string; a: string }[] = [
   {

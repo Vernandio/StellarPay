@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { getPaymentHistory } from "../services/stellar/client";
+import { getPaymentHistory, streamPayments } from "../services/stellar/client";
 import { useWalletStore } from "../store/walletStore";
 import { useAuthStore } from "../store/authStore";
 import { getRecentTransactions, TransactionRecord } from "../services/firebase/transactions";
 import { USDC_ASSET } from "../constants/stellar";
+import { getUserByPublicKey, UserProfile } from "../services/firebase/firestore";
 
 export type ActivityType = "sent" | "received" | "swap";
 
@@ -21,6 +22,7 @@ export interface Activity {
   hash?: string;
   memo?: string;
   destinationAddress?: string;
+  date: string;
 }
 
 export const useTransactions = () => {
@@ -52,6 +54,37 @@ export const useTransactions = () => {
       firestoreTxs.forEach((tx) => {
         if (tx.hash) firestoreMap.set(tx.hash, tx);
       });
+
+      // 3. Identify unique public keys to resolve dynamically from Firestore (for blockchain-only transactions)
+      const keysToResolve = new Set<string>();
+      records.forEach((record: any) => {
+        if (record.type === "payment" || record.type === "path_payment_strict_send" || record.type === "path_payment_strict_receive") {
+          const hasDbRecord = firestoreMap.has(record.transaction_hash);
+          if (!hasDbRecord) {
+            const otherKey = record.from === publicKey ? record.to : record.from;
+            if (otherKey && otherKey !== publicKey && otherKey !== USDC_ASSET.issuer) {
+              keysToResolve.add(otherKey);
+            }
+          }
+        }
+      });
+
+      // Fetch user profiles for all unique keys in parallel
+      const resolvedUsersMap = new Map<string, UserProfile>();
+      if (keysToResolve.size > 0) {
+        await Promise.all(
+          Array.from(keysToResolve).map(async (key) => {
+            try {
+              const profile = await getUserByPublicKey(key);
+              if (profile) {
+                resolvedUsersMap.set(key, profile);
+              }
+            } catch (e) {
+              console.warn(`Failed to resolve profile for key ${key}:`, e);
+            }
+          })
+        );
+      }
 
       const parsed: Activity[] = records
         .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive")
@@ -93,15 +126,14 @@ export const useTransactions = () => {
           const prefix = isPositive ? "+" : "-";
 
           // Invisible-web3: everything is shown as money, never as a crypto
-          // asset code. USDC is 1:1 USD; the (rare) native leg is treated the
-          // same so the user never sees "XLM"/"USDC".
-          // amountPrimary = the main money figure (local currency if the tx was
-          // made in one, otherwise USD). amountSecondary = the USD equivalent
-          // shown underneath when the primary is a non-USD currency.
+          // asset code. USDC is 1:1 USD; amountPrimary is either USD or converted display currency.
           let amountPrimary = `${prefix} $${amountFormatted}`;
 
           // Check if we have beautiful P2P names from Firestore
           const dbRecord = firestoreMap.get(record.transaction_hash);
+          const otherKey = isSender ? record.to : record.from;
+          const resolvedUser = resolvedUsersMap.get(otherKey);
+
           let title = "";
           let amountSecondary: string | undefined;
 
@@ -117,7 +149,7 @@ export const useTransactions = () => {
             const usdStr = `${prefix} $${parseFloat(dbRecord.amountUSD).toFixed(2)}`;
             // Display localized currency conversions if not USD
             if (dbRecord.displayCurrency && dbRecord.displayCurrency !== "USD") {
-              const formattedLocal = parseFloat(dbRecord.displayAmount).toLocaleString(undefined, {
+              const formattedLocal = parseFloat(String(dbRecord.displayAmount).replace(/,/g, '')).toLocaleString(undefined, {
                 minimumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
                 maximumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
               });
@@ -126,6 +158,9 @@ export const useTransactions = () => {
             } else {
               amountPrimary = usdStr;
             }
+          } else if (resolvedUser) {
+            // Dynamically resolved user from public key!
+            title = resolvedUser.displayName || `@${resolvedUser.username}`;
           } else {
             // Fallback for anchor deposits/withdrawals and direct transfers
             if (isSender && isReceiver) {
@@ -151,8 +186,9 @@ export const useTransactions = () => {
             dateSection,
             extra,
             hash: record.transaction_hash,
-            memo: dbRecord?.memo,
+            memo: dbRecord ? dbRecord.memo : "",
             destinationAddress: isSender ? record.to : undefined,
+            date: record.created_at,
           };
         });
 
@@ -167,6 +203,18 @@ export const useTransactions = () => {
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
+
+  // Realtime transactions sync
+  useEffect(() => {
+    if (!publicKey) return;
+    const unsubscribe = streamPayments(publicKey, (payment) => {
+      console.log("New blockchain payment detected, refreshing transactions list...");
+      fetchTransactions();
+    });
+    return () => {
+      unsubscribe();
+    };
+  }, [publicKey, fetchTransactions]);
 
   return { activities, isLoading, fetchTransactions };
 };

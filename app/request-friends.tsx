@@ -132,47 +132,8 @@ export default function RequestFriendsScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: Spacing.xxl }}>
-        {/* Quick Action Cards */}
-        <View style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.lg, gap: Spacing.md }}>
-          <View
-            style={{
-              backgroundColor: Colors.white,
-              borderRadius: 20,
-              padding: Spacing.md,
-              shadowColor: "#000",
-              shadowOffset: { width: 0, height: 2 },
-              shadowOpacity: 0.03,
-              shadowRadius: 8,
-              elevation: 2,
-            }}
-          >
-            {/* Scan QR */}
-            <TouchableOpacity onPress={handleScanQR} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}>
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.primaryGlow, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                <Feather name="camera" size={20} color={Colors.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Scan Friend's QR</Text>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Scan code to request instantly</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={Colors.textLightMuted} />
-            </TouchableOpacity>
-
-            <View style={{ height: 1, backgroundColor: Colors.borderLight, marginVertical: Spacing.sm }} />
-
-            {/* Share Link */}
-            <TouchableOpacity onPress={handleShareLink} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.sm }}>
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.tealGlow, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                <Feather name="share-2" size={20} color={Colors.teal} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Share Payment Link</Text>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Let anyone pay you via link</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={Colors.textLightMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
+        {/* Top spacing */}
+        <View style={{ height: Spacing.sm }} />
 
         {/* Search Bar */}
         <View style={{ paddingHorizontal: Spacing.lg, paddingTop: Spacing.xl, paddingBottom: Spacing.lg }}>

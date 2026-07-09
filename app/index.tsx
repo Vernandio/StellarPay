@@ -20,8 +20,8 @@ export default function Index() {
         // Force PIN verification before accessing the app
         return <Redirect href="/(auth)/pin-entry" />;
       } else {
-        // Profile exists but PIN is not setup (should rarely happen, but handle it)
-        return <Redirect href="/(auth)/signup" />;
+        // Profile exists but PIN is not setup (e.g. account locked/reset)
+        return <Redirect href={{ pathname: "/(auth)/login", params: { step: "forgot_send" } }} />;
       }
     } else {
       // Authenticated via social but username profile is not created yet

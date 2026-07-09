@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert, RefreshControl } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert, RefreshControl, Share } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -15,7 +15,7 @@ import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
 import { CURRENCIES, Currency, getCurrencyByCode } from "../../src/constants/currencies";
 import { fetchExchangeRates, ExchangeRates, convertUSDTo } from "../../src/services/exchangeRates";
-import { useTransactions } from "../../src/hooks/useTransactions";
+import { useTransactions, Activity } from "../../src/hooks/useTransactions";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
@@ -24,6 +24,8 @@ import { subscribeToPendingRequests, updatePaymentRequest, PaymentRequest } from
 import { saveTransaction } from "../../src/services/firebase/transactions";
 import { createNotification } from "../../src/services/firebase/notifications";
 import { getUserProfile } from "../../src/services/firebase/firestore";
+import ViewShot from 'react-native-view-shot';
+import * as Sharing from 'expo-sharing';
 
 const { width } = Dimensions.get("window");
 
@@ -33,6 +35,38 @@ export default function WalletScreen() {
   const { initializeWallet, send, isProcessing, error: stellarError } = useStellar();
   const { activities, fetchTransactions } = useTransactions();
   const currency = getCurrencyByCode(displayCurrencyCode);
+
+  const detailSheetRef = useRef<BottomSheetModal>(null);
+  const viewShotRef = useRef<any>(null);
+  const [selectedTx, setSelectedTx] = useState<Activity | null>(null);
+
+  const handleTxPress = (tx: Activity) => {
+    Haptics.selectionAsync();
+    setSelectedTx(tx);
+    detailSheetRef.current?.present();
+  };
+
+  const handleShareReceipt = async () => {
+    if (!selectedTx || !viewShotRef.current) return;
+    try {
+      const uri = await viewShotRef.current.capture();
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share Receipt' });
+    } catch (err) {
+      console.warn('Share receipt failed:', err);
+      try {
+        const shareMessage = `StellarPay Receipt\n\n` +
+          `Title: ${selectedTx.title}\n` +
+          `Amount: ${selectedTx.amountPrimary}\n` +
+          `Date: ${selectedTx.dateSection} ${selectedTx.time}\n` +
+          `Status: Successful\n` +
+          `Reference ID: ${selectedTx.hash || "N/A"}\n` +
+          (selectedTx.memo ? `Note: ${selectedTx.memo}\n` : "");
+        await Share.share({ message: shareMessage });
+      } catch (fallbackErr) {
+        console.warn('Fallback share failed:', fallbackErr);
+      }
+    }
+  };
   const [isBalanceHidden, setIsBalanceHidden] = useState(false);
   const [isAnchorModalVisible, setIsAnchorModalVisible] = useState(false);
   const [rates, setRates] = useState<ExchangeRates | null>(null);
@@ -96,16 +130,14 @@ export default function WalletScreen() {
       const { loadKeypairFromSecureStore } = require("../../src/services/stellar/wallet");
       const keypair = await loadKeypairFromSecureStore(user.uid);
       if (!keypair) {
-        console.warn("Stellar keypair is missing locally and cannot be restored from backup. Regenerating a fresh wallet...");
-        await initializeWallet();
+        console.warn("Stellar keypair is missing locally and cannot be restored from backup.");
         return;
       }
 
       // Case 3: Keypair exists but its public key doesn't match the registered one
-      //         (this happens when a keypair was generated with a buggy Buffer/Hermes polyfill)
       if (keypair.publicKey() !== profile.stellarPublicKey) {
-        console.warn(`Keypair public key mismatch! Local: ${keypair.publicKey()}, Profile: ${profile.stellarPublicKey}. Regenerating...`);
-        await initializeWallet();
+        console.warn(`Keypair public key mismatch! Local: ${keypair.publicKey()}, Profile: ${profile.stellarPublicKey}`);
+        return;
       }
     };
 
@@ -226,10 +258,6 @@ export default function WalletScreen() {
     );
   }
 
-  // Invisible-web3: the user only ever sees a single USD balance. XLM (network
-  // fuel) and the USDC asset code are intentionally kept out of the UI.
-  const balances = [{ id: "usd", name: "US Dollar", desc: "Available balance", amount: usdcBalance, icon: "dollar-sign", color: Colors.teal }];
-
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <LinearGradient colors={["#000000", "#111111", Colors.baseLight]} locations={[0, 0.6, 1]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 380 }} />
@@ -259,7 +287,13 @@ export default function WalletScreen() {
                   style={{ position: "absolute", top: 10, right: 10, width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.white, borderWidth: 1.5, borderColor: "rgba(255,255,255,0.15)" }}
                 />
               </Pressable>
-              <Image source={require("../../assets/images/avatar.png")} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.surface }} />
+
+              <Pressable onPress={() => router.push("/(tabs)/profile")} style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden" }}>
+                <Image
+                  source={profile?.avatarUrl ? { uri: profile.avatarUrl } : require("../../assets/images/avatar.png")}
+                  style={{ width: "100%", height: "100%", backgroundColor: Colors.surface }}
+                />
+              </Pressable>
             </View>
           </Animated.View>
 
@@ -299,9 +333,15 @@ export default function WalletScreen() {
                 </Pressable>
               </View>
 
-              <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.md }]}>
+              <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: displayCurrencyCode !== "USD" ? Spacing.xs : Spacing.md }]}>
                 {isBalanceHidden ? "****" : `${currency.symbol}${formatAmount(Number(usdcBalance) * (rates?.[currency.code as keyof ExchangeRates] ?? 1))}`}
               </Text>
+              
+              {displayCurrencyCode !== "USD" && !isBalanceHidden && (
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
+                  = ${formatAmount(Number(usdcBalance))} USD
+                </Text>
+              )}
 
               <View style={{ flexDirection: "row", justifyContent: "space-between", borderTopWidth: 1, borderTopColor: Colors.borderLight, paddingTop: Spacing.lg }}>
                 {[
@@ -419,53 +459,6 @@ export default function WalletScreen() {
             </Animated.View>
           )}
 
-          {/* My Balances */}
-          <Animated.View entering={FadeInDown.duration(300).delay(400)} style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}>
-            <View
-              style={{
-                backgroundColor: Colors.surfaceLight,
-                borderRadius: 16,
-                overflow: "hidden",
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.03,
-                shadowRadius: 8,
-                elevation: 2,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.lg, paddingBottom: Spacing.md }}>
-                <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, fontWeight: "700" }]}>My Balances</Text>
-                {/* <Pressable style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginRight: 2 }]}>See all</Text>
-                  <Feather name="chevron-right" size={16} color={Colors.textLightSecondary} />
-                </Pressable> */}
-              </View>
-              <View style={{ minHeight: balances.length * 70 }}>
-                <FlashList
-                  data={balances}
-                  renderItem={({ item, index }) => (
-                    <Pressable
-                      style={{ flexDirection: "row", alignItems: "center", padding: Spacing.lg, borderBottomWidth: index === balances.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
-                    >
-                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: item.color, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                        <Feather name={item.icon as any} size={20} color={Colors.white} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.name}</Text>
-                        <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.desc}</Text>
-                      </View>
-                      <View style={{ alignItems: "flex-end", marginRight: Spacing.sm }}>
-                        <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>{isBalanceHidden ? "****" : `$${formatAmount(item.amount)}`}</Text>
-                      </View>
-                    </Pressable>
-                  )}
-                  // @ts-ignore
-                  estimatedItemSize={70}
-                />
-              </View>
-            </View>
-          </Animated.View>
-
           {/* Recent Activity */}
           <Animated.View entering={FadeInDown.duration(300).delay(500)} style={{ paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl }}>
             <View
@@ -490,6 +483,7 @@ export default function WalletScreen() {
               {activities.slice(0, 4).map((item, index) => (
                 <Pressable
                   key={item.id}
+                  onPress={() => handleTxPress(item)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -569,6 +563,130 @@ export default function WalletScreen() {
             </TouchableOpacity>
           ))}
         </BottomSheetView>
+      </BottomSheetModal>
+
+      {/* Transaction Details Sheet */}
+      <BottomSheetModal
+        ref={detailSheetRef}
+        enableDynamicSizing={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
+      >
+        {selectedTx && (
+          <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.lg }}>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 20 }]}>
+                Transaction Details
+              </Text>
+            </View>
+
+            <ViewShot ref={viewShotRef} options={{ format: 'png', quality: 1 }} style={{ backgroundColor: Colors.white }}>
+            {/* Main Receipt Info Card */}
+            <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
+              <View style={{
+                width: 64, height: 64, borderRadius: 32,
+                backgroundColor: selectedTx.isPositive ? "rgba(29, 185, 138, 0.1)" : Colors.baseLight,
+                justifyContent: "center", alignItems: "center",
+                marginBottom: Spacing.md
+              }}>
+                <Feather
+                  name={selectedTx.icon}
+                  size={28}
+                  color={selectedTx.isPositive ? Colors.teal : Colors.textLightPrimary}
+                />
+              </View>
+              
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 24, marginBottom: 2 }]}>
+                {selectedTx.title}
+              </Text>
+              
+              {/* Large display fiat amount (primary) */}
+              <Text style={[Typography.displayLarge, { color: selectedTx.isPositive ? Colors.teal : Colors.textLightPrimary, fontWeight: "800", fontSize: 32, marginVertical: 6 }]}>
+                {selectedTx.amountSecondary ? selectedTx.amountSecondary : selectedTx.amountPrimary}
+              </Text>
+
+              {/* Subtext blockchain stablecoin amount */}
+              {selectedTx.amountSecondary && (
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
+                  {selectedTx.amountPrimary}
+                </Text>
+              )}
+
+              {/* Success Badge */}
+              <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "rgba(29, 185, 138, 0.1)", paddingHorizontal: 12, paddingVertical: 6, borderRadius: 99 }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.teal, marginRight: 6 }} />
+                <Text style={[Typography.labelSmall, { color: Colors.teal, fontWeight: "700", textTransform: "uppercase", fontSize: 11 }]}>
+                  Successful
+                </Text>
+              </View>
+            </View>
+
+            {/* Transfer Details Panel */}
+            <View style={{ backgroundColor: Colors.baseLight, borderRadius: 20, padding: Spacing.lg, marginBottom: Spacing.xl }}>
+              <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
+                Transfer Details
+              </Text>
+
+              {/* Transfer ID / Hash row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Transaction ID</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                  {selectedTx.hash ? `${selectedTx.hash.substring(0, 10)}...${selectedTx.hash.substring(selectedTx.hash.length - 10)}` : `#${selectedTx.id.substring(0, 8)}`}
+                </Text>
+              </View>
+
+              {/* Transfer Date/Time row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Date & Time</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                  {selectedTx.dateSection} • {selectedTx.time}
+                </Text>
+              </View>
+
+              {/* Transfer Fee row */}
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Transfer Fee</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.teal, fontWeight: "700" }]}>Free</Text>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: Colors.borderLightStrong, marginVertical: Spacing.xs, marginBottom: Spacing.md }} />
+
+              {/* Note / Memo Row */}
+              {selectedTx.memo ? (
+                <View style={{ marginTop: Spacing.xs }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: 6 }]}>Notes</Text>
+                  <View style={{ backgroundColor: Colors.white, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.borderLight }}>
+                    <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary }]}>
+                      {selectedTx.memo}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </View>
+            </ViewShot>
+
+            {/* Action Buttons Row */}
+            <View style={{ flexDirection: "row", gap: Spacing.md }}>
+              <TouchableOpacity
+                onPress={handleShareReceipt}
+                style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
+              >
+                <Feather name="share-2" size={16} color={Colors.textLightPrimary} style={{ marginRight: 8 }} />
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Share</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => detailSheetRef.current?.dismiss()}
+                style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: "#111111", justifyContent: "center", alignItems: "center" }}
+              >
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </BottomSheetView>
+        )}
       </BottomSheetModal>
       <InteractiveAnchorModal visible={isAnchorModalVisible} onClose={() => setIsAnchorModalVisible(false)} transactionType={anchorTxType} onSuccess={refreshBalances} />
       <PinVerifySheet ref={pinSheetRef} onSuccess={handleExecutePayment} />

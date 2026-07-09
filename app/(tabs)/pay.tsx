@@ -8,19 +8,25 @@ import { router, useLocalSearchParams } from "expo-router";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useAuthStore } from "../../src/store/authStore";
 import { CURRENCIES, Currency } from "../../src/constants/currencies";
 import QRCode from "react-native-qrcode-svg";
 import { fetchExchangeRates, ExchangeRates } from "../../src/services/exchangeRates";
 import { createPaymentRequest } from "../../src/services/firebase/requests";
 import { useWallet } from "../../src/hooks/useWallet";
+import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
+import * as MediaLibrary from 'expo-media-library';
+import ViewShot from 'react-native-view-shot';
 
 export default function PayScreen() {
   const params = useLocalSearchParams<{ tab?: string }>();
   const [activeTab, setActiveTab] = useState<"Pay" | "Request" | "Split">((params.tab as "Pay" | "Request" | "Split") || "Pay");
   const { profile } = useAuthStore();
   const requestQRSheetRef = useRef<BottomSheetModal>(null);
+  const qrRef = useRef<any>(null);
+  const qrViewShotRef = useRef<any>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
   const { usdcBalance } = useWallet();
 
@@ -79,6 +85,44 @@ export default function PayScreen() {
       Alert.alert("Error", "Failed to generate request QR code.");
     } finally {
       setQrLoading(false);
+    }
+  };
+
+  const getQRImageUri = async (): Promise<string | null> => {
+    if (!qrViewShotRef.current) return null;
+    try {
+      const uri = await qrViewShotRef.current.capture();
+      return uri;
+    } catch (err) {
+      console.warn("Capture QR failed:", err);
+      return null;
+    }
+  };
+
+  const handleShareQR = async () => {
+    const uri = await getQRImageUri();
+    if (!uri) return;
+    try {
+      await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share Request QR' });
+    } catch (err) {
+      console.warn('Share QR failed:', err);
+    }
+  };
+
+  const handleSaveQR = async () => {
+    const uri = await getQRImageUri();
+    if (!uri) return;
+    try {
+      const { status } = await MediaLibrary.requestPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Please allow photo library access to save QR codes.');
+        return;
+      }
+      await MediaLibrary.saveToLibraryAsync(uri);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert('Saved!', 'QR code saved to your photo library.');
+    } catch (err) {
+      console.warn('Save QR failed:', err);
     }
   };
 
@@ -222,7 +266,6 @@ export default function PayScreen() {
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: Spacing.lg }}>
               {[
                 { icon: "user", title: "Friends", sub: "Search username", route: "/request-friends" },
-                { icon: "link", title: "Share Link", sub: "Send via chat", route: "/modals/share-link" },
               ].map((item, idx) => (
                 <Pressable
                   key={idx}
@@ -231,7 +274,7 @@ export default function PayScreen() {
                     router.push(item.route as any);
                   }}
                   style={{
-                    width: "48%",
+                    width: "100%",
                     backgroundColor: Colors.white,
                     borderRadius: 16,
                     padding: Spacing.lg,
@@ -434,7 +477,7 @@ export default function PayScreen() {
 
               {/* Amount and Currency Selector Row */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: Spacing.lg, width: "100%" }}>
-                <TextInput
+                <BottomSheetTextInput
                   value={requestAmount}
                   onChangeText={(text) => setRequestAmount(text.replace(/,/g, ".").replace(/[^0-9.]/g, ""))}
                   placeholder="0.00"
@@ -468,12 +511,12 @@ export default function PayScreen() {
 
               {/* Notes Input Field */}
               <View style={{ width: "100%", backgroundColor: Colors.baseLight, borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: 2, marginBottom: Spacing.xl }}>
-                <TextInput
+                <BottomSheetTextInput
                   value={requestNotes}
                   onChangeText={setRequestNotes}
                   placeholder="Add notes / reason (e.g. Lunch split)"
                   placeholderTextColor={Colors.textLightSecondary}
-                  style={{ color: Colors.textLightPrimary, minHeight: 48 }}
+                  style={{ color: Colors.textLightPrimary, minHeight: 48, width: "100%" }}
                 />
               </View>
 
@@ -487,6 +530,7 @@ export default function PayScreen() {
             </View>
           ) : (
             <View style={{ width: "100%", alignItems: "center" }}>
+              <ViewShot ref={qrViewShotRef} options={{ format: 'png', quality: 1 }} style={{ backgroundColor: Colors.white, alignItems: "center", width: "100%", paddingVertical: Spacing.md }}>
               <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginTop: Spacing.sm, fontWeight: "700" }]}>Request Payment QR</Text>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: Spacing.xs, textAlign: "center", marginBottom: Spacing.lg }]}>Scan this QR to pay instantly</Text>
 
@@ -504,7 +548,7 @@ export default function PayScreen() {
                   marginBottom: Spacing.xl,
                 }}
               >
-                <QRCode value={qrValue} size={180} color={Colors.textLightPrimary} backgroundColor={Colors.white} />
+                <QRCode value={qrValue} size={180} color={Colors.textLightPrimary} backgroundColor={Colors.white} getRef={(ref: any) => (qrRef.current = ref)} />
               </View>
 
               <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, fontWeight: "600", marginBottom: Spacing.xs }]}>@{profile?.username}</Text>
@@ -517,10 +561,11 @@ export default function PayScreen() {
                 </Text>
                 {requestNotes ? ` for "${requestNotes}"` : ""}
               </Text>
+            </ViewShot>
 
-              <View style={{ flexDirection: "row", gap: Spacing.md, width: "100%" }}>
+              <View style={{ flexDirection: "row", gap: Spacing.sm, width: "100%" }}>
                 <TouchableOpacity
-                  onPress={() => setQrGenerated(false)}
+                  onPress={handleShareQR}
                   style={{
                     flex: 1,
                     height: 52,
@@ -530,9 +575,29 @@ export default function PayScreen() {
                     justifyContent: "center",
                     alignItems: "center",
                     backgroundColor: Colors.white,
+                    flexDirection: "row",
                   }}
                 >
-                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Edit</Text>
+                  <Feather name="share-2" size={16} color={Colors.textLightPrimary} style={{ marginRight: 6 }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Share</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={handleSaveQR}
+                  style={{
+                    flex: 1,
+                    height: 52,
+                    borderRadius: 26,
+                    borderWidth: 1,
+                    borderColor: Colors.borderLightStrong,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: Colors.white,
+                    flexDirection: "row",
+                  }}
+                >
+                  <Feather name="download" size={16} color={Colors.textLightPrimary} style={{ marginRight: 6 }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Save</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

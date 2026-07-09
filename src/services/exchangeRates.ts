@@ -2,6 +2,7 @@
 // Fetches real-time USD conversion rates from open.er-api.com
 // Supports: USD, IDR, PHP, VND, SGD, MYR
 // ──────────────────────────────────────────────────────────────────────
+import { API_BASE } from "./api/client";
 
 export interface ExchangeRates {
   USD: number;
@@ -47,10 +48,10 @@ export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
   }
 
   try {
-    const response = await fetch("https://open.er-api.com/v6/latest/USD");
+    const response = await fetch(`${API_BASE}/api/rates`);
     const data = await response.json();
 
-    if (data.result === "success" && data.rates) {
+    if (data.rates) {
       const newRates: ExchangeRates = {
         USD: 1,
         IDR: data.rates.IDR ?? FALLBACK_RATES.IDR,
@@ -66,10 +67,10 @@ export const fetchExchangeRates = async (): Promise<ExchangeRates> => {
     }
 
     // API returned but with unexpected shape
-    console.warn("Exchange rate API returned unexpected shape:", data);
+    console.warn("Exchange rate backend API returned unexpected shape:", data);
     return cachedRates;
   } catch (error) {
-    console.warn("Failed to fetch exchange rates, using cached/fallback:", error);
+    console.warn("Failed to fetch exchange rates from backend, using cached/fallback:", error);
     return cachedRates;
   }
 };

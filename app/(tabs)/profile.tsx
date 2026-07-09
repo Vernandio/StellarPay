@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Image, TouchableOpacity } from "react-native";
+import { View, Text, ScrollView, Pressable, Image, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -11,14 +11,72 @@ import { useAuth } from "../../src/hooks/useAuth";
 import { useWallet } from "../../src/hooks/useWallet";
 import { signOut } from "../../src/services/firebase/auth";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import * as Clipboard from "expo-clipboard";
 import { CURRENCIES, getCurrencyByCode } from "../../src/constants/currencies";
+import * as ImagePicker from 'expo-image-picker';
+import { doc, updateDoc } from 'firebase/firestore';
+import { db } from '../../src/services/firebase/config';
 
 export default function ProfileScreen() {
   const { profile } = useAuth();
   const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
   const currencySheetRef = useRef<BottomSheetModal>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl || null);
+  const [avatarLoading, setAvatarLoading] = useState(false);
+
+  const handlePickAvatar = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+
+      if (result.canceled || !result.assets?.[0]) return;
+
+      setAvatarLoading(true);
+      const asset = result.assets[0];
+
+      // Upload to Cloudinary via unsigned preset
+      const formData = new FormData();
+      formData.append('file', {
+        uri: asset.uri,
+        type: asset.mimeType || 'image/jpeg',
+        name: 'avatar.jpg',
+      } as any);
+      const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'stellarpay_avatars';
+      const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'stellarpay';
+      
+      formData.append('upload_preset', uploadPreset);
+      formData.append('folder', 'avatars');
+      const uploadRes = await fetch(
+        `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+        { method: 'POST', body: formData }
+      );
+      const uploadData = await uploadRes.json();
+
+      if (!uploadData.secure_url) {
+        throw new Error('Upload failed');
+      }
+
+      // Update Firestore profile
+      if (profile?.uid) {
+        await updateDoc(doc(db, 'users', profile.uid), {
+          avatarUrl: uploadData.secure_url,
+        });
+      }
+
+      setAvatarUrl(uploadData.secure_url);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      console.error('Avatar upload failed:', err);
+      Alert.alert('Upload Failed', err.message || 'Could not upload photo. Please try again.');
+    } finally {
+      setAvatarLoading(false);
+    }
+  };
 
   const handleSignOut = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -41,10 +99,15 @@ export default function ProfileScreen() {
         <View style={{ backgroundColor: "#111111", paddingBottom: 60, paddingTop: 70, paddingHorizontal: Spacing.lg, borderBottomLeftRadius: 32, borderBottomRightRadius: 32, alignItems: "center" }}>
           {/* Avatar */}
           <View style={{ marginBottom: Spacing.md }}>
-            <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.surface, justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 3, borderColor: "rgba(255,255,255,0.1)" }}>
-              {/* Replace with actual image in a real app */}
-              <Feather name="user" size={40} color={Colors.white} />
-            </View>
+            <TouchableOpacity onPress={handlePickAvatar} style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: Colors.surface, justifyContent: "center", alignItems: "center", overflow: "hidden", borderWidth: 3, borderColor: "rgba(255,255,255,0.1)" }}>
+              {avatarLoading ? (
+                <ActivityIndicator size="large" color={Colors.white} />
+              ) : avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={{ width: 100, height: 100, borderRadius: 50 }} />
+              ) : (
+                <Feather name="user" size={40} color={Colors.white} />
+              )}
+            </TouchableOpacity>
             <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: Colors.white, width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 }}>
               <Feather name="camera" size={16} color={Colors.textLightPrimary} />
             </View>
@@ -108,10 +171,6 @@ export default function ProfileScreen() {
                 <Text style={[Typography.labelSmall, { color: "rgba(255,255,255,0.6)", marginBottom: 4 }]}>CARDHOLDER</Text>
                 <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "600", textTransform: "uppercase" }]}>{profile?.displayName || "ALEX CHEN"}</Text>
               </View>
-              <View>
-                <Text style={[Typography.labelSmall, { color: "rgba(255,255,255,0.6)", marginBottom: 4 }]}>EXP</Text>
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "600" }]}>12/28</Text>
-              </View>
               <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" }}>
                 <Text style={{ color: Colors.white, fontWeight: "bold", fontStyle: "italic", fontSize: 16 }}>PAY</Text>
               </View>
@@ -124,7 +183,7 @@ export default function ProfileScreen() {
               { icon: "user", title: "Personal Information", value: "", onPress: () => router.push("/personal-information" as any) },
               { icon: "bell", title: "Notifications", value: "", onPress: () => router.push("/notification-settings" as any) },
               { icon: "link-2", title: "Linked Accounts", value: "", onPress: () => router.push("/linked-accounts" as any) },
-              { icon: "shield", title: "Security", value: "", onPress: () => router.push("/security" as any) },
+              { icon: "lock", title: "Change PIN", value: "", onPress: () => router.push("/security" as any) },
               { icon: "sliders", title: "Preferences", value: displayCurrencyCode, onPress: () => currencySheetRef.current?.present() },
             ].map((item, idx, arr) => (
               <Pressable
