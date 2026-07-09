@@ -82,12 +82,7 @@ export default function PayScreen() {
     }
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
-    ),
-    []
-  );
+  const renderBackdrop = useCallback((props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />, []);
 
   const qrValue = `stellarpay:request?id=${requestId}`;
 
@@ -108,23 +103,33 @@ export default function PayScreen() {
         return (
           <Animated.View entering={FadeInDown.duration(300)}>
             {/* PAY TO */}
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              Pay To
-            </Text>
-            
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>Pay To</Text>
+
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: Spacing.lg }}>
               {[
                 { icon: "user", title: "Friends", sub: "By username", route: "/pay-friends" },
                 { icon: "wifi", title: "Tap to Pay", sub: "Near field", route: "/pay-tap" },
-                { icon: "link", title: "Onchain", sub: "To address", route: "/pay-onchain" },
               ].map((item, idx) => (
-                <Pressable 
-                  key={idx} 
+                <Pressable
+                  key={idx}
                   onPress={() => {
                     Haptics.selectionAsync();
                     router.push(item.route as any);
                   }}
-                  style={{ width: "31%", backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.sm, paddingVertical: Spacing.lg, alignItems: "center", marginBottom: Spacing.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}
+                  style={{
+                    width: "48%",
+                    backgroundColor: Colors.white,
+                    borderRadius: 16,
+                    paddingHorizontal: Spacing.sm,
+                    paddingVertical: Spacing.lg,
+                    alignItems: "center",
+                    marginBottom: Spacing.md,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 8,
+                    elevation: 2,
+                  }}
                 >
                   <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginBottom: Spacing.sm }}>
                     <Feather name={item.icon as any} size={24} color={Colors.textLightPrimary} />
@@ -136,17 +141,29 @@ export default function PayScreen() {
             </View>
 
             {/* YOU WILL PAY WITH */}
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              You will pay with
-            </Text>
-            
-            <Pressable style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.lg, marginBottom: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>You will pay with</Text>
+
+            <Pressable
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                padding: Spacing.lg,
+                marginBottom: Spacing.xl,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
               <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
                 <Text style={{ color: Colors.white, fontWeight: "bold", fontSize: 18 }}>$</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>USDC</Text>
-                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>USDC (Stellar)</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>US Dollar</Text>
+                <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Cash balance</Text>
               </View>
               <View style={{ alignItems: "flex-end", marginRight: Spacing.sm }}>
                 <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>
@@ -160,17 +177,26 @@ export default function PayScreen() {
             </Pressable>
 
             {/* QUICK ACTIONS */}
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              Quick Actions
-            </Text>
-            
-            <View style={{ backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>Quick Actions</Text>
+
+            <View
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                paddingHorizontal: Spacing.lg,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+              }}
+            >
               {[
                 { icon: "maximize", title: "Scan QR", sub: "Pay a merchant", route: "/qr" },
                 { icon: "grid", title: "Show my QR", sub: "Let others scan to pay", route: "/qr" },
               ].map((item, idx) => (
-                <Pressable 
-                  key={idx} 
+                <Pressable
+                  key={idx}
                   onPress={() => {
                     if (item.route) router.push(item.route as any);
                   }}
@@ -187,26 +213,36 @@ export default function PayScreen() {
             </View>
           </Animated.View>
         );
-      
+
       case "Request":
         return (
           <Animated.View entering={FadeInDown.duration(300)}>
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              Request From
-            </Text>
-            
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>Request From</Text>
+
             <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", marginBottom: Spacing.lg }}>
               {[
                 { icon: "user", title: "Friends", sub: "Search username", route: "/request-friends" },
                 { icon: "link", title: "Share Link", sub: "Send via chat", route: "/modals/share-link" },
               ].map((item, idx) => (
-                <Pressable 
-                  key={idx} 
+                <Pressable
+                  key={idx}
                   onPress={() => {
                     Haptics.selectionAsync();
                     router.push(item.route as any);
                   }}
-                  style={{ width: "48%", backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.lg, alignItems: "center", marginBottom: Spacing.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}
+                  style={{
+                    width: "48%",
+                    backgroundColor: Colors.white,
+                    borderRadius: 16,
+                    padding: Spacing.lg,
+                    alignItems: "center",
+                    marginBottom: Spacing.md,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.03,
+                    shadowRadius: 8,
+                    elevation: 2,
+                  }}
                 >
                   <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginBottom: Spacing.sm }}>
                     <Feather name={item.icon as any} size={24} color={Colors.textLightPrimary} />
@@ -217,14 +253,36 @@ export default function PayScreen() {
               ))}
             </View>
 
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              My Payment QR
-            </Text>
-            <Pressable 
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>My Payment QR</Text>
+            <Pressable
               onPress={handleShowRequestQR}
-              style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.xl, alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, marginBottom: Spacing.xl }}
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                padding: Spacing.xl,
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+                marginBottom: Spacing.xl,
+              }}
             >
-              <View style={{ width: 160, height: 160, backgroundColor: Colors.white, borderWidth: 2, borderColor: Colors.borderLight, borderStyle: "dashed", borderRadius: 16, justifyContent: "center", alignItems: "center", marginBottom: Spacing.lg }}>
+              <View
+                style={{
+                  width: 160,
+                  height: 160,
+                  backgroundColor: Colors.white,
+                  borderWidth: 2,
+                  borderColor: Colors.borderLight,
+                  borderStyle: "dashed",
+                  borderRadius: 16,
+                  justifyContent: "center",
+                  alignItems: "center",
+                  marginBottom: Spacing.lg,
+                }}
+              >
                 <Feather name="grid" size={64} color={Colors.textLightPrimary} />
               </View>
               <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 4 }]}>Show QR Code</Text>
@@ -236,12 +294,22 @@ export default function PayScreen() {
       case "Split":
         return (
           <Animated.View entering={FadeInDown.duration(300)}>
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              Split a Bill
-            </Text>
-            
-            <Pressable 
-              style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.lg, flexDirection: "row", alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2, marginBottom: Spacing.lg }}
+            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>Split a Bill</Text>
+
+            <Pressable
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 16,
+                padding: Spacing.lg,
+                flexDirection: "row",
+                alignItems: "center",
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.03,
+                shadowRadius: 8,
+                elevation: 2,
+                marginBottom: Spacing.lg,
+              }}
               onPress={() => {
                 Haptics.selectionAsync();
                 router.push("/split-bill");
@@ -256,30 +324,6 @@ export default function PayScreen() {
               </View>
               <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
             </Pressable>
-
-            <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: Spacing.md }]}>
-              Recent Expenses
-            </Text>
-            
-            <View style={{ backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
-              {[
-                { title: "Dinner at Sushi Tei", date: "Today", amount: "$84.50", splitWith: "3 friends" },
-                { title: "Netflix Subscription", date: "Yesterday", amount: "$15.99", splitWith: "4 friends" },
-              ].map((item, idx) => (
-                <Pressable key={idx} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                    <Feather name="coffee" size={18} color={Colors.textLightPrimary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.title}</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Split with {item.splitWith}</Text>
-                  </View>
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>{item.amount}</Text>
-                  </View>
-                </Pressable>
-              ))}
-            </View>
           </Animated.View>
         );
     }
@@ -291,31 +335,79 @@ export default function PayScreen() {
         {/* Header */}
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xs }}>
           <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 28 }]}>Pay</Text>
-          <Pressable onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/activity"); }}>
+          <Pressable
+            onPress={() => {
+              Haptics.selectionAsync();
+              router.push("/(tabs)/activity");
+            }}
+          >
             <Feather name="clock" size={22} color={Colors.textLightPrimary} />
           </Pressable>
         </View>
-        <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>
-          Fast. Secure. Borderless.
-        </Text>
+        <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.xl }]}>Fast. Secure. Borderless.</Text>
 
         {/* Segmented Control */}
-        <View style={{ flexDirection: "row", backgroundColor: Colors.white, borderRadius: 99, padding: 6, marginBottom: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 2 }}>
-          <Pressable 
+        <View
+          style={{
+            flexDirection: "row",
+            backgroundColor: Colors.white,
+            borderRadius: 99,
+            padding: 6,
+            marginBottom: Spacing.xl,
+            shadowColor: "#000",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.05,
+            shadowRadius: 12,
+            elevation: 2,
+          }}
+        >
+          <Pressable
             onPress={() => handleTabPress("Pay")}
-            style={{ flex: 1, backgroundColor: activeTab === "Pay" ? "#111111" : "transparent", borderRadius: 99, paddingVertical: 14, alignItems: "center", shadowColor: activeTab === "Pay" ? "#000" : "transparent", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}
+            style={{
+              flex: 1,
+              backgroundColor: activeTab === "Pay" ? "#111111" : "transparent",
+              borderRadius: 99,
+              paddingVertical: 14,
+              alignItems: "center",
+              shadowColor: activeTab === "Pay" ? "#000" : "transparent",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}
           >
             <Text style={[Typography.labelLarge, { color: activeTab === "Pay" ? Colors.white : Colors.textLightSecondary, fontWeight: "700" }]}>Pay</Text>
           </Pressable>
-          <Pressable 
+          <Pressable
             onPress={() => handleTabPress("Request")}
-            style={{ flex: 1, backgroundColor: activeTab === "Request" ? "#111111" : "transparent", borderRadius: 99, paddingVertical: 14, alignItems: "center", shadowColor: activeTab === "Request" ? "#000" : "transparent", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}
+            style={{
+              flex: 1,
+              backgroundColor: activeTab === "Request" ? "#111111" : "transparent",
+              borderRadius: 99,
+              paddingVertical: 14,
+              alignItems: "center",
+              shadowColor: activeTab === "Request" ? "#000" : "transparent",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}
           >
             <Text style={[Typography.labelLarge, { color: activeTab === "Request" ? Colors.white : Colors.textLightSecondary, fontWeight: "700" }]}>Request</Text>
           </Pressable>
-          <Pressable 
+          <Pressable
             onPress={() => handleTabPress("Split")}
-            style={{ flex: 1, backgroundColor: activeTab === "Split" ? "#111111" : "transparent", borderRadius: 99, paddingVertical: 14, alignItems: "center", flexDirection: "row", justifyContent: "center", shadowColor: activeTab === "Split" ? "#000" : "transparent", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 }}
+            style={{
+              flex: 1,
+              backgroundColor: activeTab === "Split" ? "#111111" : "transparent",
+              borderRadius: 99,
+              paddingVertical: 14,
+              alignItems: "center",
+              flexDirection: "row",
+              justifyContent: "center",
+              shadowColor: activeTab === "Split" ? "#000" : "transparent",
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.2,
+              shadowRadius: 4,
+            }}
           >
             <Feather name="maximize" size={14} color={activeTab === "Split" ? Colors.white : Colors.textLightSecondary} style={{ marginRight: 6 }} />
             <Text style={[Typography.labelLarge, { color: activeTab === "Split" ? Colors.white : Colors.textLightSecondary, fontWeight: "700" }]}>Split</Text>
@@ -323,7 +415,6 @@ export default function PayScreen() {
         </View>
 
         {renderContent()}
-
       </ScrollView>
 
       {/* Request QR Sheet */}
@@ -338,18 +429,14 @@ export default function PayScreen() {
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, alignItems: "center" }}>
           {!qrGenerated ? (
             <View style={{ width: "100%", alignItems: "center" }}>
-              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginTop: Spacing.sm, fontWeight: "700" }]}>
-                Set Request Details
-              </Text>
-              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: Spacing.xs, textAlign: "center" }]}>
-                Specify an amount and notes to generate a request QR code
-              </Text>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginTop: Spacing.sm, fontWeight: "700" }]}>Set Request Details</Text>
+              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: Spacing.xs, textAlign: "center" }]}>Specify an amount and notes to generate a request QR code</Text>
 
               {/* Amount and Currency Selector Row */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: Spacing.lg, width: "100%" }}>
                 <TextInput
                   value={requestAmount}
-                  onChangeText={(text) => setRequestAmount(text.replace(/[^0-9.]/g, ""))}
+                  onChangeText={(text) => setRequestAmount(text.replace(/,/g, ".").replace(/[^0-9.]/g, ""))}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={Colors.textLightMuted}
@@ -362,26 +449,22 @@ export default function PayScreen() {
                   }}
                   style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.baseLight, paddingHorizontal: Spacing.md, paddingVertical: 8, borderRadius: 99 }}
                 >
-                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>
-                    {requestCurrency.code}
-                  </Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>{requestCurrency.code}</Text>
                   <Feather name="chevron-down" size={16} color={Colors.textLightPrimary} />
                 </TouchableOpacity>
               </View>
 
               {/* Dynamic USD conversion subtext */}
-              {requestCurrency.code !== "USD" && requestAmount && parseFloat(requestAmount) > 0 ? (() => {
-                const amountNum = parseFloat(requestAmount);
-                if (isNaN(amountNum)) return null;
-                const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
-                const rateToUse = localRates[requestCurrency.code as keyof ExchangeRates] || 1;
-                const usdVal = (amountNum / rateToUse).toFixed(2);
-                return (
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: -Spacing.sm, marginBottom: Spacing.lg }]}>
-                    ≈ ${usdVal} USD
-                  </Text>
-                );
-              })() : null}
+              {requestCurrency.code !== "USD" && requestAmount && parseFloat(requestAmount) > 0
+                ? (() => {
+                    const amountNum = parseFloat(requestAmount);
+                    if (isNaN(amountNum)) return null;
+                    const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
+                    const rateToUse = localRates[requestCurrency.code as keyof ExchangeRates] || 1;
+                    const usdVal = (amountNum / rateToUse).toFixed(2);
+                    return <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: -Spacing.sm, marginBottom: Spacing.lg }]}>≈ ${usdVal} USD</Text>;
+                  })()
+                : null}
 
               {/* Notes Input Field */}
               <View style={{ width: "100%", backgroundColor: Colors.baseLight, borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: 2, marginBottom: Spacing.xl }}>
@@ -390,7 +473,7 @@ export default function PayScreen() {
                   onChangeText={setRequestNotes}
                   placeholder="Add notes / reason (e.g. Lunch split)"
                   placeholderTextColor={Colors.textLightSecondary}
-                  style={[Typography.bodyLarge, { color: Colors.textLightPrimary, minHeight: 48 }]}
+                  style={{ color: Colors.textLightPrimary, minHeight: 48 }}
                 />
               </View>
 
@@ -399,43 +482,55 @@ export default function PayScreen() {
                 disabled={qrLoading}
                 style={{ width: "100%", height: 52, borderRadius: 26, backgroundColor: "#111111", justifyContent: "center", alignItems: "center" }}
               >
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>
-                  {qrLoading ? "Generating..." : "Generate QR Code"}
-                </Text>
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>{qrLoading ? "Generating..." : "Generate QR Code"}</Text>
               </TouchableOpacity>
             </View>
           ) : (
             <View style={{ width: "100%", alignItems: "center" }}>
-              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginTop: Spacing.sm, fontWeight: "700" }]}>
-                Request Payment QR
-              </Text>
-              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: Spacing.xs, textAlign: "center", marginBottom: Spacing.lg }]}>
-                Scan this QR to pay instantly
-              </Text>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginTop: Spacing.sm, fontWeight: "700" }]}>Request Payment QR</Text>
+              <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: Spacing.xs, textAlign: "center", marginBottom: Spacing.lg }]}>Scan this QR to pay instantly</Text>
 
               {/* QR Code Container */}
-              <View style={{ padding: Spacing.xl, backgroundColor: Colors.white, borderRadius: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4, marginBottom: Spacing.xl }}>
-                <QRCode
-                  value={qrValue}
-                  size={180}
-                  color={Colors.textLightPrimary}
-                  backgroundColor={Colors.white}
-                />
+              <View
+                style={{
+                  padding: Spacing.xl,
+                  backgroundColor: Colors.white,
+                  borderRadius: 24,
+                  shadowColor: "#000",
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.05,
+                  shadowRadius: 16,
+                  elevation: 4,
+                  marginBottom: Spacing.xl,
+                }}
+              >
+                <QRCode value={qrValue} size={180} color={Colors.textLightPrimary} backgroundColor={Colors.white} />
               </View>
 
-              <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, fontWeight: "600", marginBottom: Spacing.xs }]}>
-                stellarpay:@{profile?.username}
-              </Text>
-              
+              <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, fontWeight: "600", marginBottom: Spacing.xs }]}>@{profile?.username}</Text>
+
               <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, textAlign: "center", paddingHorizontal: Spacing.xl, marginBottom: Spacing.lg }]}>
-                Requested: <Text style={{ fontWeight: "700", color: Colors.textLightPrimary }}>{requestCurrency.symbol}{parseFloat(requestAmount).toLocaleString(undefined, { minimumFractionDigits: requestCurrency.code === "VND" || requestCurrency.code === "IDR" ? 0 : 2 })} {requestCurrency.code}</Text>
+                Requested:{" "}
+                <Text style={{ fontWeight: "700", color: Colors.textLightPrimary }}>
+                  {requestCurrency.symbol}
+                  {parseFloat(requestAmount).toLocaleString(undefined, { minimumFractionDigits: requestCurrency.code === "VND" || requestCurrency.code === "IDR" ? 0 : 2 })} {requestCurrency.code}
+                </Text>
                 {requestNotes ? ` for "${requestNotes}"` : ""}
               </Text>
 
               <View style={{ flexDirection: "row", gap: Spacing.md, width: "100%" }}>
                 <TouchableOpacity
                   onPress={() => setQrGenerated(false)}
-                  style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
+                  style={{
+                    flex: 1,
+                    height: 52,
+                    borderRadius: 26,
+                    borderWidth: 1,
+                    borderColor: Colors.borderLightStrong,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    backgroundColor: Colors.white,
+                  }}
                 >
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Edit</Text>
                 </TouchableOpacity>
@@ -465,9 +560,7 @@ export default function PayScreen() {
         enablePanDownToClose={true}
       >
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
-          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>
-            Select Request Currency
-          </Text>
+          <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.lg, marginTop: Spacing.sm }]}>Select Request Currency</Text>
           {CURRENCIES.map((c) => (
             <TouchableOpacity
               key={c.code}

@@ -73,7 +73,7 @@ export default function QRPayScreen() {
   }, [qrData]);
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
+    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
     setLocalAmount(cleaned);
   };
@@ -97,7 +97,7 @@ export default function QRPayScreen() {
     const numericUsd = parseFloat(usdAmount);
     if (numericUsd > parseFloat(usdcBalance)) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Insufficient Balance", "Your USD stablecoin balance is not enough to cover this payment.");
+      Alert.alert("Insufficient Balance", "Your balance is not enough to cover this payment.");
       return;
     }
 
@@ -275,7 +275,7 @@ export default function QRPayScreen() {
                     Dari Rekening:
                   </Text>
                   <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: 2 }]}>
-                    Stellar Wallet (USD Stablecoin)
+                    US Dollar Balance
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>

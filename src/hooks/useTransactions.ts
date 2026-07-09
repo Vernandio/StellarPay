@@ -89,11 +89,16 @@ export const useTransactions = () => {
             dateSection = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
           }
 
-          const assetCode = record.asset_type === "native" ? "XLM" : record.asset_code;
           const amountFormatted = parseFloat(record.amount).toFixed(2);
-          
           const prefix = isPositive ? "+" : "-";
-          const amountPrimary = `${prefix} ${amountFormatted} ${assetCode}`;
+
+          // Invisible-web3: everything is shown as money, never as a crypto
+          // asset code. USDC is 1:1 USD; the (rare) native leg is treated the
+          // same so the user never sees "XLM"/"USDC".
+          // amountPrimary = the main money figure (local currency if the tx was
+          // made in one, otherwise USD). amountSecondary = the USD equivalent
+          // shown underneath when the primary is a non-USD currency.
+          let amountPrimary = `${prefix} $${amountFormatted}`;
 
           // Check if we have beautiful P2P names from Firestore
           const dbRecord = firestoreMap.get(record.transaction_hash);
@@ -106,36 +111,29 @@ export const useTransactions = () => {
             } else if (isReceiver && !isSender) {
               title = dbRecord.senderDisplayName || `@${dbRecord.senderUsername}`;
             } else {
-              title = "Swap";
+              title = "Exchange";
             }
 
+            const usdStr = `${prefix} $${parseFloat(dbRecord.amountUSD).toFixed(2)}`;
             // Display localized currency conversions if not USD
             if (dbRecord.displayCurrency && dbRecord.displayCurrency !== "USD") {
               const formattedLocal = parseFloat(dbRecord.displayAmount).toLocaleString(undefined, {
                 minimumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
                 maximumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
               });
-              amountSecondary = `${prefix} ${dbRecord.displayCurrency} ${formattedLocal}`;
+              amountPrimary = `${prefix} ${dbRecord.displayCurrency} ${formattedLocal}`;
+              amountSecondary = usdStr;
             } else {
-              amountSecondary = `${prefix} $${parseFloat(dbRecord.amountUSD).toFixed(2)}`;
+              amountPrimary = usdStr;
             }
           } else {
-            // Fallback for anchor deposits/withdrawals and direct Horizon transfers
+            // Fallback for anchor deposits/withdrawals and direct transfers
             if (isSender && isReceiver) {
-              title = "Swap Asset";
+              title = "Exchange";
             } else if (isReceiver) {
-              // Check if from anchor/issuer
-              if (record.from === USDC_ASSET.issuer) {
-                title = "Funds Deposited";
-              } else {
-                title = `From ${record.from.substring(0, 4)}...${record.from.substring(52)}`;
-              }
+              title = record.from === USDC_ASSET.issuer ? "Money Added" : "Received";
             } else {
-              if (record.to === USDC_ASSET.issuer) {
-                title = "Funds Withdrawn";
-              } else {
-                title = `To ${record.to.substring(0, 4)}...${record.to.substring(52)}`;
-              }
+              title = record.to === USDC_ASSET.issuer ? "Money Withdrawn" : "Sent";
             }
           }
 

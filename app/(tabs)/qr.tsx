@@ -128,7 +128,7 @@ export default function QRScreen() {
           // Fetch requester's profile to get public key
           const requesterProfile = await getUserProfile(reqData.senderUid);
           if (!requesterProfile?.stellarPublicKey) {
-            throw new Error("Requester has not initialized their Stellar wallet yet.");
+            throw new Error("This person hasn't finished setting up their account yet.");
           }
 
           setIsLookingUp(false);

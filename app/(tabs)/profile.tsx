@@ -9,10 +9,9 @@ import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useWallet } from "../../src/hooks/useWallet";
-import { truncateAddress } from "../../src/utils/format";
 import { signOut } from "../../src/services/firebase/auth";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useState, useRef, useCallback } from "react";
+import { useRef, useCallback } from "react";
 import * as Clipboard from "expo-clipboard";
 import { CURRENCIES, getCurrencyByCode } from "../../src/constants/currencies";
 
@@ -20,7 +19,6 @@ export default function ProfileScreen() {
   const { profile } = useAuth();
   const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
   const currencySheetRef = useRef<BottomSheetModal>(null);
-  const [isCardHidden, setIsCardHidden] = useState(true);
 
   const handleSignOut = async () => {
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -70,29 +68,21 @@ export default function ProfileScreen() {
         {/* Content Section overlapping the header */}
         <View style={{ paddingHorizontal: Spacing.lg, marginTop: -30 }}>
           
-          {/* Stellar Account Card */}
+          {/* Account handle card — shows the shareable @username, not the
+              underlying Stellar key (invisible-web3) */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 20, padding: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
             <View style={{ flex: 1, paddingRight: Spacing.md }}>
-              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>Stellar Account</Text>
+              <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>My Account</Text>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, letterSpacing: 1 }]}>
-                {publicKey ? (isCardHidden ? truncateAddress(publicKey) : publicKey) : "GB...Z3YB"}
+                @{profile?.username || "username"}
               </Text>
             </View>
             <View style={{ flexDirection: "row", gap: Spacing.sm }}>
-              <TouchableOpacity 
-                style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center" }}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                  setIsCardHidden(!isCardHidden);
-                }}
-              >
-                <Feather name={isCardHidden ? "eye" : "eye-off"} size={18} color={Colors.textLightPrimary} />
-              </TouchableOpacity>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: Colors.baseLight, justifyContent: "center", alignItems: "center" }}
                 onPress={async () => {
-                  if (publicKey) {
-                    await Clipboard.setStringAsync(publicKey);
+                  if (profile?.username) {
+                    await Clipboard.setStringAsync(`@${profile.username}`);
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   }
                 }}
@@ -105,7 +95,7 @@ export default function ProfileScreen() {
           {/* Stellar Card */}
           <LinearGradient colors={["#333333", "#111111", "#000000"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 24, padding: Spacing.xl, marginBottom: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.4, shadowRadius: 16, elevation: 8 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xl }}>
-              <Text style={[Typography.labelLarge, { color: "rgba(255,255,255,0.8)", fontWeight: "600", letterSpacing: 1 }]}>STELLAR CARD</Text>
+              <Text style={[Typography.labelLarge, { color: "rgba(255,255,255,0.8)", fontWeight: "600", letterSpacing: 1 }]}>STELLARPAY</Text>
               <Feather name="wifi" size={24} color={Colors.white} style={{ transform: [{ rotate: "90deg" }] }} />
             </View>
             <View style={{ marginBottom: Spacing.xl }}>
@@ -123,7 +113,7 @@ export default function ProfileScreen() {
                 <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "600" }]}>12/28</Text>
               </View>
               <View style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" }}>
-                <Text style={{ color: Colors.white, fontWeight: "bold", fontStyle: "italic", fontSize: 16 }}>STELLAR</Text>
+                <Text style={{ color: Colors.white, fontWeight: "bold", fontStyle: "italic", fontSize: 16 }}>PAY</Text>
               </View>
             </View>
           </LinearGradient>
@@ -132,17 +122,18 @@ export default function ProfileScreen() {
           <View style={{ backgroundColor: Colors.white, borderRadius: 24, paddingHorizontal: Spacing.lg, marginBottom: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
             {[
               { icon: "user", title: "Personal Information", value: "", onPress: () => router.push("/personal-information" as any) },
-              { icon: "link-2", title: "Linked Accounts", value: "", onPress: () => {} },
+              { icon: "bell", title: "Notifications", value: "", onPress: () => router.push("/notification-settings" as any) },
+              { icon: "link-2", title: "Linked Accounts", value: "", onPress: () => router.push("/linked-accounts" as any) },
               { icon: "shield", title: "Security", value: "", onPress: () => router.push("/security" as any) },
               { icon: "sliders", title: "Preferences", value: displayCurrencyCode, onPress: () => currencySheetRef.current?.present() },
-            ].map((item, idx) => (
+            ].map((item, idx, arr) => (
               <Pressable
                 key={idx}
                 onPress={() => {
                   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   item.onPress();
                 }}
-                style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 3 ? 0 : 1, borderBottomColor: Colors.borderLight }}
+                style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === arr.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
               >
                 <Feather name={item.icon as any} size={22} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
                 <Text style={[Typography.labelLarge, { flex: 1, color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.title}</Text>
@@ -157,10 +148,17 @@ export default function ProfileScreen() {
           {/* Menu Block 2 */}
           <View style={{ backgroundColor: Colors.white, borderRadius: 24, paddingHorizontal: Spacing.lg, marginBottom: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
             {[
-              { icon: "headphones", title: "Support" },
-              { icon: "info", title: "About StellarPay" },
-            ].map((item, idx) => (
-              <Pressable key={idx} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+              { icon: "headphones", title: "Support", onPress: () => router.push("/support" as any) },
+              { icon: "info", title: "About StellarPay", onPress: () => router.push("/about" as any) },
+            ].map((item, idx, arr) => (
+              <Pressable
+                key={idx}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  item.onPress();
+                }}
+                style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === arr.length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
+              >
                 <Feather name={item.icon as any} size={22} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
                 <Text style={[Typography.labelLarge, { flex: 1, color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.title}</Text>
                 <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />

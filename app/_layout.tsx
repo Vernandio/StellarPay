@@ -7,6 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useNotificationListener } from "../src/hooks/useNotificationListener";
+import { AppFrame } from "../src/components/AppFrame";
 import "../global.css";
 
 export default function RootLayout() {
@@ -18,6 +19,7 @@ export default function RootLayout() {
       <BottomSheetModalProvider>
         <SafeAreaProvider>
           <StatusBar style="light" />
+          <AppFrame>
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0F0E23" } }}>
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
@@ -55,7 +57,12 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="security" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="personal-information" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="notification-settings" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="linked-accounts" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="support" options={{ animation: "slide_from_right" }} />
+            <Stack.Screen name="about" options={{ animation: "slide_from_right" }} />
           </Stack>
+          </AppFrame>
         </SafeAreaProvider>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>

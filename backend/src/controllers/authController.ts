@@ -46,24 +46,19 @@ export const resetPassword = async (req: Request, res: Response) => {
       message: "Password reset link generated successfully",
       // In production, DO NOT return the link in the response. Just return a success message.
       // We return it here for demonstration/testing purposes.
-      debug_link:
-        process.env.NODE_ENV === "development" ? resetLink : undefined,
+      debug_link: process.env.NODE_ENV === "development" ? resetLink : undefined,
     });
   } catch (error: any) {
     console.error("Password reset error:", error);
 
     if (error.code === "auth/user-not-found") {
       // Return a generic message to prevent email enumeration
-      return res
-        .status(200)
-        .json({
-          message: "If that email is in our system, a reset link will be sent.",
-        });
+      return res.status(200).json({
+        message: "If that email is in our system, a reset link will be sent.",
+      });
     }
 
-    return res
-      .status(500)
-      .json({ error: "Failed to process password reset request" });
+    return res.status(500).json({ error: "Failed to process password reset request" });
   }
 };
 
@@ -184,11 +179,7 @@ export const checkAvailability = async (req: Request, res: Response) => {
     }
 
     if (username) {
-      const snap = await adminFirestore
-        .collection("users")
-        .where("username", "==", username.trim().toLowerCase())
-        .limit(1)
-        .get();
+      const snap = await adminFirestore.collection("users").where("username", "==", username.trim().toLowerCase()).limit(1).get();
       result.username = snap.empty;
     }
 
@@ -221,11 +212,7 @@ export const resolveUser = async (req: Request, res: Response) => {
     } catch (_) {}
 
     // 3. Try username in Firestore
-    const snap = await adminFirestore
-      .collection("users")
-      .where("username", "==", id)
-      .limit(1)
-      .get();
+    const snap = await adminFirestore.collection("users").where("username", "==", id).limit(1).get();
     if (!snap.empty) {
       const profile = snap.docs[0].data();
       return res.status(200).json({ email: profile.email, uid: profile.uid });
@@ -240,8 +227,7 @@ export const resolveUser = async (req: Request, res: Response) => {
 
 // ── Forgot PIN: 8-char alphanumeric OTP ───────────────────────────────
 const ALPHANUM = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // no I/O/0/1 → avoids confusion
-const genAlphanumOtp = (len = 8) =>
-  Array.from({ length: len }, () => ALPHANUM[Math.floor(Math.random() * ALPHANUM.length)]).join("");
+const genAlphanumOtp = (len = 8) => Array.from({ length: len }, () => ALPHANUM[Math.floor(Math.random() * ALPHANUM.length)]).join("");
 
 export const sendForgotPinOtp = async (req: Request, res: Response) => {
   try {
@@ -256,7 +242,7 @@ export const sendForgotPinOtp = async (req: Request, res: Response) => {
     await createTransporter().sendMail({
       from: `"StellarPay Security" <${process.env.SMTP_EMAIL}>`,
       to: email,
-      subject: "StellarPay – Reset Your Security PIN",
+      subject: "StellarPay - Reset Your Security PIN",
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:auto;padding:32px">
           <h2 style="color:#111;margin-bottom:8px">Reset Your Security PIN</h2>

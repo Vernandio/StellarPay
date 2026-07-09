@@ -69,7 +69,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
 
   const startAnchorFlow = async () => {
     if (!user || !profile || !profile.stellarPublicKey) {
-      setError("Please initialize your Stellar wallet profile first");
+      setError("Your account isn't ready yet. Please try again in a moment.");
       setInitLoading(false);
       return;
     }
@@ -79,26 +79,26 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
       const publicKey = profile.stellarPublicKey;
 
       // Step 1: Parse stellar.toml
-      setProgressText("Fetching Anchor configuration...");
+      setProgressText("Getting things ready...");
       const config = await fetchStellarToml(anchorDomain);
       if (!config.webAuthEndpoint || !config.transferServer) {
-        throw new Error("Anchor does not support SEP-24 / SEP-10 endpoints");
+        throw new Error("This service is temporarily unavailable. Please try again later.");
       }
 
       // Step 2: Authenticate via SEP-10
-      setProgressText("Authenticating (SEP-10)...");
+      setProgressText("Verifying your identity...");
       const token = await authenticateSEP10(user.uid, publicKey, config.webAuthEndpoint);
 
       // Step 2.5: Ensure USDC Trustline is established
-      setProgressText("Verifying USDC trustline...");
+      setProgressText("Checking your account...");
       const trustlineExists = await checkUSDCTrustlineExists(publicKey);
       if (!trustlineExists) {
-        setProgressText("Establishing USDC trustline...");
+        setProgressText("Setting up your account...");
         await setupUSDCTrustline(user.uid, publicKey);
       }
 
       // Step 3: Initiate Interactive Transaction via SEP-24
-      setProgressText("Initiating transaction...");
+      setProgressText("Starting your transfer...");
       let response;
       if (transactionType === "deposit") {
         response = await initiateInteractiveDeposit(config.transferServer, token, publicKey);
@@ -122,7 +122,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
         console.error("AxiosError Headers:", JSON.stringify(err.response.headers));
         console.error("AxiosError Data:", JSON.stringify(err.response.data));
       }
-      setError(err.message || "Failed to initialize interactive transfer");
+      setError(err.message || "Couldn't start the transfer. Please try again.");
       setInitLoading(false);
     }
   };
@@ -153,7 +153,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
         }
       } catch (err: any) {
         console.error("Polling Error:", err);
-        setError(err.message || "Anchor transaction failed");
+        setError(err.message || "Transfer failed. Please try again.");
         if (pollingRef.current) {
           clearInterval(pollingRef.current);
           pollingRef.current = null;
@@ -172,7 +172,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
         throw new Error("Missing withdrawal transfer details from Anchor response");
       }
 
-      setProgressText("Submitting withdrawal payment on-chain...");
+      setProgressText("Processing your withdrawal...");
       setInitLoading(true);
 
       console.log("Submitting withdrawal payment of", tx.amount_in, USDC_ASSET.code, "to", tx.withdraw_anchor_account);
@@ -188,11 +188,11 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
       });
 
       setInitLoading(false);
-      setProgressText("Payment submitted. Awaiting Anchor confirmation...");
+      setProgressText("Almost done — confirming your transfer...");
       isPayingRef.current = false;
     } catch (err: any) {
       console.error("Automatic Withdrawal Payment Error:", err);
-      setError(err.message || "Failed to submit withdrawal payment on-chain");
+      setError(err.message || "Couldn't process your withdrawal. Please try again.");
       isPayingRef.current = false;
     }
   };
@@ -309,8 +309,8 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
                   </Text>
                   <Text style={[Typography.bodyMedium, { color: Colors.textSecondary, textAlign: "center", marginTop: Spacing.sm }]}>
                     {transactionType === "deposit"
-                      ? "USDC has been added to your balance."
-                      : "USDC withdrawal has been processed."}
+                      ? "Money has been added to your balance."
+                      : "Your withdrawal has been processed."}
                   </Text>
                 </View>
               </Animated.View>

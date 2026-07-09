@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { View, Text, TouchableOpacity, Dimensions, Platform, NativeModules, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, Platform, NativeModules, ActivityIndicator } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -16,6 +16,7 @@ import Animated, {
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
+import { getContentWidth } from "../src/constants/layout";
 import { useAuthStore } from "../src/store/authStore";
 import { getUserProfile } from "../src/services/firebase/firestore";
 
@@ -68,8 +69,8 @@ if (hasHce) {
 
 // ── Constants ─────────────────────────────────────────────────────────
 
-const { width } = Dimensions.get("window");
-const CIRCLE_SIZE = width * 0.6;
+// Clamp to the app's content column so the pulse rings don't overflow on web.
+const CIRCLE_SIZE = getContentWidth() * 0.6;
 
 // Namespaces the NDEF text payload so the scanner can reject random NFC
 // tags (transit cards, stickers) that also carry text records. Only the

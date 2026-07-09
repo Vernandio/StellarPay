@@ -37,8 +37,8 @@ export default function AddMoneyScreen() {
   }, []);
 
   const handleAmountChange = (text: string) => {
-    // Only allow numbers and one decimal point
-    const cleaned = text.replace(/[^0-9.]/g, "");
+    // Only allow numbers and one decimal point ("," locale decimal key → ".")
+    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, "");
     if (cleaned.split(".").length > 2) return;
     setAmount(cleaned);
   };
@@ -56,7 +56,6 @@ export default function AddMoneyScreen() {
     { id: "apple_pay", title: "Apple Pay", icon: "smartphone", sub: "Instant" },
     { id: "card", title: "Debit Card", icon: "credit-card", sub: "Visa ending in 4242" },
     { id: "bank", title: "Bank Transfer", icon: "briefcase", sub: "1-3 business days" },
-    { id: "crypto", title: "Crypto Deposit", icon: "link", sub: "Via Stellar Network" },
   ];
 
   return (

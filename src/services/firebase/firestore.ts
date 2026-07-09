@@ -16,8 +16,25 @@ export interface UserProfile {
   stellarPublicKey: string | null;
   authProviders?: string[];
   hasPin?: boolean;
+  notificationPrefs?: NotificationPrefs;
   createdAt: Timestamp;
 }
+
+/** Per-category notification toggles, persisted on the user profile. */
+export interface NotificationPrefs {
+  payments: boolean;   // received / sent payments
+  requests: boolean;   // money requests + their outcomes
+  security: boolean;   // PIN changes, new sign-ins
+  marketing: boolean;  // product news & promos
+}
+
+/** Applied when a profile has never saved preferences. */
+export const DEFAULT_NOTIFICATION_PREFS: NotificationPrefs = {
+  payments: true,
+  requests: true,
+  security: true,
+  marketing: false,
+};
 
 export interface WalletData {
   uid: string;
@@ -51,6 +68,19 @@ export const getUserByUsername = async (username: string): Promise<UserProfile |
   const q = query(collection(db, "users"), where("username", "==", username.toLowerCase()), limit(1));
   const snap = await getDocs(q);
   return snap.empty ? null : (snap.docs[0].data() as UserProfile);
+};
+
+/**
+ * Returns true if `username` is free to claim, or already belongs to
+ * `currentUid` (so a user re-saving their own unchanged username passes).
+ * Usernames are stored lowercase; the caller must normalize before calling.
+ */
+export const isUsernameAvailable = async (
+  username: string,
+  currentUid: string
+): Promise<boolean> => {
+  const existing = await getUserByUsername(username);
+  return !existing || existing.uid === currentUid;
 };
 
 export const getUserByPhone = async (phone: string): Promise<UserProfile | null> => {
@@ -134,43 +164,69 @@ export const subscribeToTransactions = (
 };
 
 import { Friend } from "../../types";
+import type { TransactionRecord } from "./transactions";
+import type { PaymentRequest } from "./requests";
 
+/**
+ * Suggested friends = people the user has reached out to money-wise:
+ *   • people they've SENT money to (transactions where they are the sender), and
+ *   • people they've REQUESTED money from (requests where they are the requester).
+ * De-duplicated by username, ordered most-recent-interaction first. Open QR
+ * requests (no specific recipient) and the user themselves are excluded.
+ *
+ * Queries are single-field equality (no orderBy) so they don't need a composite
+ * index; recency ordering is done in memory.
+ */
 export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
-  const q = query(
-    collection(db, "transactions"),
-    where("uid", "==", uid),
-    orderBy("createdAt", "desc"),
-    limit(200)
-  );
-  
-  const snap = await getDocs(q);
-  const txs = snap.docs.map(d => d.data() as TransactionCache);
-  
-  const sentTo = new Set<string>();
-  const receivedFrom = new Set<string>();
-  
-  for (const tx of txs) {
-    if (tx.counterpartyUsername) {
-      if (tx.type === "send") sentTo.add(tx.counterpartyUsername.toLowerCase());
-      if (tx.type === "receive") receivedFrom.add(tx.counterpartyUsername.toLowerCase());
+  const sentQ = query(collection(db, "transactions"), where("senderUid", "==", uid));
+  const requestedQ = query(collection(db, "requests"), where("senderUid", "==", uid));
+
+  const [sentSnap, requestedSnap] = await Promise.all([getDocs(sentQ), getDocs(requestedQ)]);
+
+  type Candidate = { uid: string; username: string; displayName: string; at: number };
+  const byUsername = new Map<string, Candidate>();
+
+  const consider = (
+    counterpartyUid: string,
+    username: string | undefined,
+    displayName: string | undefined,
+    at: number
+  ) => {
+    if (!username || counterpartyUid === uid) return; // skip open requests + self
+    const key = username.toLowerCase();
+    const name = displayName?.trim() || username;
+    const existing = byUsername.get(key);
+    if (!existing) {
+      byUsername.set(key, { uid: counterpartyUid, username, displayName: name, at });
+      return;
     }
-  }
-  
-  const mutualFriends = [...sentTo].filter(username => receivedFrom.has(username));
-  const friends: Friend[] = [];
-  
-  for (const username of mutualFriends.slice(0, 10)) {
-    const profile = await getUserByUsername(username);
-    if (profile) {
-      friends.push({
-        id: profile.uid,
-        name: profile.displayName || profile.username,
-        handle: `@${profile.username}`,
-        avatar: (profile.displayName || profile.username).charAt(0).toUpperCase(),
-        color: "#7B61FF",
-      });
+    existing.at = Math.max(existing.at, at);
+    if (!existing.uid && counterpartyUid) existing.uid = counterpartyUid;
+    // Prefer a real display name over one that's just the handle.
+    if (existing.displayName === existing.username && name !== username) {
+      existing.displayName = name;
     }
-  }
-  
-  return friends;
+  };
+
+  const millis = (t: any): number => (t?.toMillis ? t.toMillis() : 0);
+
+  sentSnap.docs.forEach((d) => {
+    const t = d.data() as TransactionRecord;
+    consider(t.receiverUid, t.receiverUsername, t.receiverDisplayName, millis(t.createdAt));
+  });
+  requestedSnap.docs.forEach((d) => {
+    const r = d.data() as PaymentRequest;
+    consider(r.receiverUid, r.receiverUsername, undefined, millis(r.createdAt));
+  });
+
+  return [...byUsername.values()]
+    .sort((a, b) => b.at - a.at)
+    .slice(0, 10)
+    .map((c) => ({
+      id: c.uid || c.username,
+      name: c.displayName,
+      handle: `@${c.username}`,
+      avatar: c.displayName.charAt(0).toUpperCase(),
+      color: "#7B61FF",
+    }));
 };

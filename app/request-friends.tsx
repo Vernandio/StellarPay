@@ -198,7 +198,7 @@ export default function RequestFriendsScreen() {
               onChangeText={setSearch}
               placeholder="Search by username, phone, or email"
               placeholderTextColor={Colors.textLightSecondary}
-              style={[Typography.bodyLarge, { flex: 1, color: Colors.textLightPrimary, height: "100%" }]}
+              style={{ flex: 1, color: Colors.textLightPrimary, height: "100%" }}
               selectionColor={Colors.teal}
             />
             {searchLoading ? (

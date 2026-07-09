@@ -64,8 +64,9 @@ export default function SendScreen() {
   }, [params.amount]);
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
-    if (cleaned.split(".").length > 2) return;
+    let cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // treat "," (locale decimal key) as "."
+    if (cleaned.split(".").length > 2) return; // reject a second decimal point
+    cleaned = cleaned.replace(/^0+(?=\d)/, ""); // drop leading zeros ("05" → "5", keep "0.5")
     setAmount(cleaned);
   };
 
@@ -257,7 +258,7 @@ export default function SendScreen() {
               >
                 <TextInput
                   ref={amountInputRef}
-                  value={parseFloat(amount).toFixed(2)}
+                  value={amount}
                   onChangeText={handleAmountChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
@@ -354,7 +355,7 @@ export default function SendScreen() {
                 placeholder="Dinner last night 🍽️"
                 placeholderTextColor={Colors.textLightSecondary}
                 maxLength={120}
-                style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "500" }]}
+                style={{ color: Colors.textLightPrimary, fontWeight: "500" }}
                 selectionColor={Colors.teal}
               />
             </View>

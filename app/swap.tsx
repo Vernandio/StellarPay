@@ -42,7 +42,7 @@ export default function SwapScreen() {
   const receiveAmount = payAmount ? (parseFloat(payAmount) * currentRate).toFixed(isXlmToUsdc ? 2 : 4) : "0.00";
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
+    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
     setPayAmount(cleaned);
   };

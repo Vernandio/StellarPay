@@ -43,7 +43,7 @@ export default function ActivityScreen() {
         `Amount: ${selectedTx.amountPrimary}\n` +
         `Date: ${selectedTx.dateSection} ${selectedTx.time}\n` +
         `Status: Successful\n` +
-        `Tx Hash: ${selectedTx.hash || "N/A"}\n` +
+        `Reference ID: ${selectedTx.hash || "N/A"}\n` +
         (selectedTx.memo ? `Note: ${selectedTx.memo}\n` : "");
 
       await Share.share({
@@ -249,15 +249,15 @@ export default function ActivityScreen() {
                 {selectedTx.title}
               </Text>
               
-              {/* Large display fiat amount (primary) */}
+              {/* Large display amount (primary — local currency or USD) */}
               <Text style={[Typography.displayLarge, { color: selectedTx.isPositive ? Colors.teal : Colors.textLightPrimary, fontWeight: "800", fontSize: 32, marginVertical: 6 }]}>
-                {selectedTx.amountSecondary ? selectedTx.amountSecondary : selectedTx.amountPrimary}
+                {selectedTx.amountPrimary}
               </Text>
 
-              {/* Subtext blockchain stablecoin amount */}
+              {/* Subtext USD equivalent (only when primary is a local currency) */}
               {selectedTx.amountSecondary && (
                 <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
-                  {selectedTx.amountPrimary}
+                  {selectedTx.amountSecondary}
                 </Text>
               )}
 

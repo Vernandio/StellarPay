@@ -24,7 +24,7 @@ const features = [
   },
   {
     title: "Pay by\nUsername",
-    description: "Forget complex wallet addresses. Send money globally using just a simple username."
+    description: "Forget long account numbers. Send money globally using just a simple username."
   }
 ];
 

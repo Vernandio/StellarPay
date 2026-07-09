@@ -20,26 +20,26 @@ const { height } = Dimensions.get("window");
 export default function RequestScreen() {
   const params = useLocalSearchParams();
   const insets = useSafeAreaInsets();
-  
+
   let parsedGroup: any[] = [];
   if (params.group && typeof params.group === "string") {
     try {
       parsedGroup = JSON.parse(params.group);
-    } catch (e) { }
+    } catch (e) {}
   }
-  
+
   const isGroup = parsedGroup.length > 0;
-  
+
   const { profile } = useAuthStore();
   const [amount, setAmount] = useState("");
   const [forReason, setForReason] = useState("");
   const [message, setMessage] = useState("");
   const [currency, setCurrency] = useState(CURRENCIES[0]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [groupAmounts, setGroupAmounts] = useState<{[id: string]: string}>({});
+  const [groupAmounts, setGroupAmounts] = useState<{ [id: string]: string }>({});
   const [rates, setRates] = useState<ExchangeRates | null>(null);
   const [ratesLoading, setRatesLoading] = useState(true);
-  
+
   const amountInputRef = useRef<TextInput>(null);
   const currencySheetRef = useRef<BottomSheetModal>(null);
 
@@ -63,17 +63,17 @@ export default function RequestScreen() {
   }, []);
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
+    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
     setAmount(cleaned);
-    
+
     // Auto-split if group
     if (isGroup && cleaned) {
       const parsedTotal = parseFloat(cleaned);
       if (!isNaN(parsedTotal) && parsedGroup.length > 0) {
         const split = (parsedTotal / parsedGroup.length).toFixed(2);
-        const newAmounts: {[id: string]: string} = {};
-        parsedGroup.forEach(p => newAmounts[p.id] = split);
+        const newAmounts: { [id: string]: string } = {};
+        parsedGroup.forEach((p) => (newAmounts[p.id] = split));
         setGroupAmounts(newAmounts);
       }
     } else if (isGroup) {
@@ -82,13 +82,13 @@ export default function RequestScreen() {
   };
 
   const handleIndividualAmountChange = (id: string, text: string) => {
-    const cleaned = text.replace(/[^0-9.]/g, "");
+    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
-    
-    setGroupAmounts(prev => {
+
+    setGroupAmounts((prev) => {
       const next = { ...prev, [id]: cleaned };
       let newTotal = 0;
-      parsedGroup.forEach(p => {
+      parsedGroup.forEach((p) => {
         newTotal += parseFloat(next[p.id] || "0");
       });
       setAmount(newTotal > 0 ? newTotal.toFixed(2) : "");
@@ -114,23 +114,21 @@ export default function RequestScreen() {
           const friendAmountNum = parseFloat(friendAmount);
           if (friendAmountNum <= 0) continue;
 
-          const usdAmountVal = currency.code === "USD"
-            ? friendAmountNum.toFixed(2)
-            : (friendAmountNum / rateToUse).toFixed(2);
+          const usdAmountVal = currency.code === "USD" ? friendAmountNum.toFixed(2) : (friendAmountNum / rateToUse).toFixed(2);
 
-          const usernameClean = friend.handle.replace('@', '');
+          const usernameClean = friend.handle.replace("@", "");
 
           // Create payment request
           const requestId = await createPaymentRequest({
-            senderUid: profile?.uid || '',
-            senderUsername: profile?.username || '',
-            senderDisplayName: profile?.displayName || profile?.username || '',
+            senderUid: profile?.uid || "",
+            senderUsername: profile?.username || "",
+            senderDisplayName: profile?.displayName || profile?.username || "",
             receiverUid: friend.id,
             receiverUsername: usernameClean,
             amountUSD: usdAmountVal,
             requestedCurrency: currency.code,
             requestedAmount: friendAmountNum.toString(),
-            message: message || forReason || '',
+            message: message || forReason || "",
           });
 
           // Format localized display string for notification
@@ -139,30 +137,28 @@ export default function RequestScreen() {
             maximumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
           }).format(friendAmountNum);
 
-          const displayRequestStr = currency.code === "USD"
-            ? `$${formattedSplitAmount} USD`
-            : `${currency.symbol}${formattedSplitAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
+          const displayRequestStr = currency.code === "USD" ? `$${formattedSplitAmount} USD` : `${currency.symbol}${formattedSplitAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
 
           // Create notification for the recipient
           await createNotification({
             uid: friend.id,
-            title: 'Split Bill Request',
-            message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ''}`,
-            type: 'request_received',
+            title: "Split Bill Request",
+            message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ""}`,
+            type: "request_received",
             referenceId: requestId,
           });
         }
 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Split Sent!', 'Your split bill requests have been sent.');
+        Alert.alert("Split Sent!", "Your split bill requests have been sent.");
         router.navigate("/(tabs)/pay");
       } else {
         // Look up recipient
-        const recipientUsername = (params.handle as string)?.replace('@', '') || '';
+        const recipientUsername = (params.handle as string)?.replace("@", "") || "";
         const recipient = await getUserByUsername(recipientUsername);
 
         if (!recipient) {
-          Alert.alert('Error', 'Could not find recipient.');
+          Alert.alert("Error", "Could not find recipient.");
           return;
         }
 
@@ -171,15 +167,15 @@ export default function RequestScreen() {
 
         // Create payment request
         const requestId = await createPaymentRequest({
-          senderUid: profile?.uid || '',
-          senderUsername: profile?.username || '',
-          senderDisplayName: profile?.displayName || profile?.username || '',
+          senderUid: profile?.uid || "",
+          senderUsername: profile?.username || "",
+          senderDisplayName: profile?.displayName || profile?.username || "",
           receiverUid: recipient.uid,
           receiverUsername: recipient.username,
           amountUSD: usdAmountVal,
           requestedCurrency: currency.code,
           requestedAmount: amountNum.toString(),
-          message: message || forReason || '',
+          message: message || forReason || "",
         });
 
         // Format localized display string for notification
@@ -188,43 +184,35 @@ export default function RequestScreen() {
           maximumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
         }).format(amountNum);
 
-        const displayRequestStr = currency.code === "USD"
-          ? `$${formattedAmount} USD`
-          : `${currency.symbol}${formattedAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
+        const displayRequestStr = currency.code === "USD" ? `$${formattedAmount} USD` : `${currency.symbol}${formattedAmount} ${currency.code} (≈ $${usdAmountVal} USD)`;
 
         // Create notification for the recipient
         await createNotification({
           uid: recipient.uid,
-          title: 'Payment Request',
-          message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ''}`,
-          type: 'request_received',
+          title: "Payment Request",
+          message: `${profile?.displayName || profile?.username} requested ${displayRequestStr}${forReason ? ` for ${forReason}` : ""}`,
+          type: "request_received",
           referenceId: requestId,
         });
 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert('Request Sent!', `Your request for ${displayRequestStr} has been sent.`);
+        Alert.alert("Request Sent!", `Your request for ${displayRequestStr} has been sent.`);
         router.back();
       }
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert('Error', err.message || 'Failed to send request.');
+      Alert.alert("Error", err.message || "Failed to send request.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
-    ),
-    []
-  );
+  const renderBackdrop = useCallback((props: any) => <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />, []);
 
   return (
     <View style={{ flex: 1, backgroundColor: Colors.baseLight }}>
       <SafeAreaView style={{ flex: 1 }} edges={["top"]}>
         <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
-          
           {/* Header */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, height: 56 }}>
             <TouchableOpacity onPress={() => router.back()} style={{ width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" }}>
@@ -234,25 +222,46 @@ export default function RequestScreen() {
             <View style={{ width: 40 }} />
           </View>
 
-          <ScrollView 
-            contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }}
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: 100 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
             {/* Requester Section */}
             <View style={{ marginTop: Spacing.lg, marginBottom: Spacing.xl }}>
               <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>From</Text>
-              
+
               {isGroup ? (
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
                   <View style={{ flexDirection: "row", marginRight: Spacing.md }}>
                     {parsedGroup.slice(0, 3).map((contact, i) => (
-                      <View key={contact.id} style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: contact.color, justifyContent: "center", alignItems: "center", marginLeft: i > 0 ? -16 : 0, borderWidth: 2, borderColor: Colors.baseLight }}>
+                      <View
+                        key={contact.id}
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          backgroundColor: contact.color,
+                          justifyContent: "center",
+                          alignItems: "center",
+                          marginLeft: i > 0 ? -16 : 0,
+                          borderWidth: 2,
+                          borderColor: Colors.baseLight,
+                        }}
+                      >
                         <Text style={[Typography.headingMedium, { color: Colors.white, fontSize: 16 }]}>{contact.avatar}</Text>
                       </View>
                     ))}
                     {parsedGroup.length > 3 && (
-                      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: Colors.border, justifyContent: "center", alignItems: "center", marginLeft: -16, borderWidth: 2, borderColor: Colors.baseLight }}>
+                      <View
+                        style={{
+                          width: 48,
+                          height: 48,
+                          borderRadius: 24,
+                          backgroundColor: Colors.border,
+                          justifyContent: "center",
+                          alignItems: "center",
+                          marginLeft: -16,
+                          borderWidth: 2,
+                          borderColor: Colors.baseLight,
+                        }}
+                      >
                         <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>+{parsedGroup.length - 3}</Text>
                       </View>
                     )}
@@ -266,7 +275,17 @@ export default function RequestScreen() {
                 </View>
               ) : (
                 <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: (params.color as string) || Colors.baseLight, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
+                  <View
+                    style={{
+                      width: 56,
+                      height: 56,
+                      borderRadius: 28,
+                      backgroundColor: (params.color as string) || Colors.baseLight,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginRight: Spacing.md,
+                    }}
+                  >
                     <Text style={[Typography.headingLarge, { color: Colors.white }]}>{params.avatar || "U"}</Text>
                   </View>
                   <View>
@@ -278,8 +297,18 @@ export default function RequestScreen() {
             </View>
 
             {/* Main Form Card */}
-            <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
-              
+            <View
+              style={{
+                backgroundColor: Colors.white,
+                borderRadius: 24,
+                padding: Spacing.xl,
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.05,
+                shadowRadius: 12,
+                elevation: 3,
+              }}
+            >
               {/* Amount */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.xs }]}>Amount</Text>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xl }}>
@@ -293,7 +322,7 @@ export default function RequestScreen() {
                   style={[Typography.displayLarge, { fontSize: 40, lineHeight: 48, color: Colors.textLightPrimary, flex: 1, height: 56 }]}
                   selectionColor={Colors.teal}
                 />
-                <TouchableOpacity 
+                <TouchableOpacity
                   onPress={() => {
                     Keyboard.dismiss();
                     currencySheetRef.current?.present();
@@ -306,18 +335,16 @@ export default function RequestScreen() {
               </View>
 
               {/* USD Equivalent (if not USD) */}
-              {currency.code !== "USD" && amount ? (() => {
-                const amountNum = parseFloat(amount);
-                if (isNaN(amountNum) || amountNum <= 0) return null;
-                const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
-                const rateToUse = localRates[currency.code as keyof ExchangeRates] || 1;
-                const usdVal = (amountNum / rateToUse).toFixed(2);
-                return (
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: -Spacing.sm, marginBottom: Spacing.lg }]}>
-                    ≈ ${usdVal} USD
-                  </Text>
-                );
-              })() : null}
+              {currency.code !== "USD" && amount
+                ? (() => {
+                    const amountNum = parseFloat(amount);
+                    if (isNaN(amountNum) || amountNum <= 0) return null;
+                    const localRates = rates || { USD: 1, IDR: 16350, PHP: 56.2, VND: 25450, SGD: 1.34, MYR: 4.72 };
+                    const rateToUse = localRates[currency.code as keyof ExchangeRates] || 1;
+                    const usdVal = (amountNum / rateToUse).toFixed(2);
+                    return <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: -Spacing.sm, marginBottom: Spacing.lg }]}>≈ ${usdVal} USD</Text>;
+                  })()
+                : null}
 
               {/* For */}
               <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.sm }]}>For</Text>
@@ -341,7 +368,7 @@ export default function RequestScreen() {
                 placeholder="Thanks in advance! 🙏"
                 placeholderTextColor={Colors.textLightSecondary}
                 maxLength={120}
-                style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "500" }]}
+                style={{ color: Colors.textLightPrimary, fontWeight: "500" }}
                 selectionColor={Colors.teal}
               />
             </View>
@@ -350,7 +377,18 @@ export default function RequestScreen() {
             {isGroup && (
               <View style={{ marginTop: Spacing.xl }}>
                 <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, fontWeight: "500", marginBottom: Spacing.md }]}>Split Details</Text>
-                <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 12, elevation: 3 }}>
+                <View
+                  style={{
+                    backgroundColor: Colors.white,
+                    borderRadius: 24,
+                    padding: Spacing.lg,
+                    shadowColor: "#000",
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.05,
+                    shadowRadius: 12,
+                    elevation: 3,
+                  }}
+                >
                   {parsedGroup.map((contact, index) => (
                     <View key={contact.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: index === parsedGroup.length - 1 ? 0 : Spacing.lg }}>
                       <View style={{ flexDirection: "row", alignItems: "center", flex: 1, marginRight: Spacing.md }}>
@@ -378,7 +416,6 @@ export default function RequestScreen() {
                 </View>
               </View>
             )}
-
           </ScrollView>
 
           {/* Bottom Action Bar */}
@@ -394,11 +431,7 @@ export default function RequestScreen() {
               }}
               disabled={!amount || parseFloat(amount) <= 0 || isSubmitting}
             >
-              {isSubmitting ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Request</Text>
-              )}
+              {isSubmitting ? <ActivityIndicator color={Colors.white} /> : <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700", fontSize: 16 }]}>Request</Text>}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>
@@ -432,9 +465,7 @@ export default function RequestScreen() {
                 <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{c.code}</Text>
                 <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{c.name}</Text>
               </View>
-              {currency.code === c.code && (
-                <Feather name="check" size={24} color={Colors.textLightPrimary} />
-              )}
+              {currency.code === c.code && <Feather name="check" size={24} color={Colors.textLightPrimary} />}
             </TouchableOpacity>
           ))}
         </BottomSheetView>
