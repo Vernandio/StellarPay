@@ -1,117 +1,147 @@
-# StellarPay 🚀
+# StellarPay: Invisible Web3 Wallet (Web2.5 Architecture)
 
-StellarPay adalah aplikasi fintech dompet digital hibrida (Web2.5) berbasis blockchain Stellar. Aplikasi ini menyembunyikan semua kerumitan Web3 (seperti gas fees, trustlines, dan wallet addresses panjang) bagi pengguna biasa, menyajikan antarmuka super bersih bernilai dolar (USD) seperti Cash App / Venmo, namun berjalan sepenuhnya secara on-chain di latar belakang memanfaatkan protokol Stellar SEP-10 & SEP-24.
-
----
-
-## Struktur Folder Project
-*   `/` (Root): Aplikasi Mobile & Web berbasis **React Native Expo Go**.
-*   `/backend`: API Server Backend berbasis **Node.js Express** & **Firebase Admin SDK**.
+StellarPay is a hybrid Web2.5 digital wallet built on the Stellar blockchain network. It bridges the gap between Web2 convenience (like Cash App or Venmo) and Web3 utility. All blockchain-specific complexities—such as gas fees, trustlines, public keys, secret keys, and base64-encoded XDR transactions—are abstracted away from the end user. The interface is presented entirely in fiat equivalents (USD), while settling transactions fully on-chain in the background.
 
 ---
 
-## 1. Setup & Konfigurasi Backend
+## App Previews & Showcases
 
-Masuk ke folder backend untuk memulai setup:
-```bash
-cd backend
+Below are placeholder links for showcasing the user interface and interactions. You can drop in your own image assets or screen recordings here:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│                      [DEMO BANNER]                       │
+│             Location: /assets/banner.png                 │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### A. Install Dependencies
-Instal semua package yang diperlukan untuk server backend:
-```bash
-npm install
-```
-
-### B. Konfigurasi File Environment (`.env`)
-Buat file `.env` baru di dalam folder `backend/` dengan menyalin file template:
-```bash
-cp .env.example .env
-```
-Buka file `.env` tersebut dan isi variabel yang diperlukan:
-*   `PORT`: Port default untuk server (default: `5000`).
-*   `FIREBASE_SERVICE_ACCOUNT_PATH`: Jalur file kredensial admin firebase (default: `./serviceAccountKey.json`).
-*   `STELLAR_NETWORK`: Atur ke `TESTNET` untuk uji coba sandbox.
-*   `SMTP_EMAIL` & `SMTP_PASSWORD`: Data autentikasi email SMTP Anda untuk pengiriman email otomatis.
-
-### C. Salin Kredensial Firebase Admin (`serviceAccountKey.json`)
-Untuk menghubungkan server backend dengan Firebase Firestore dan Authentication:
-1.  Buka **Firebase Console** -> Pilih Project Anda -> Klik ikon Gigi (Project Settings) -> Buka tab **Service Accounts**.
-2.  Klik tombol **Generate new private key** untuk mengunduh berkas kunci privat JSON.
-3.  Ubah nama berkas yang diunduh tersebut menjadi **`serviceAccountKey.json`**.
-4.  Salin/pindahkan file `serviceAccountKey.json` tersebut ke dalam folder **`backend/`**.
-
-### D. Jalankan Server Backend
-*   **Mode Development** (dengan auto-reload):
-    ```bash
-    npm run dev
-    ```
-*   **Mode Produksi**:
-    ```bash
-    npm run build
-    npm start
-    ```
+| Home & Balance Streams | Gemini AI OCR Split Bill | PIN Entry & Lockout |
+|:---:|:---:|:---:|
+| `![Home Preview](./assets/screenshots/home.png)` | `![OCR Preview](./assets/screenshots/split.png)` | `![PIN Preview](./assets/screenshots/pin.png)` |
 
 ---
 
-## 2. Setup & Konfigurasi Frontend (Root)
+## Core Technical Architecture & Features
 
-Kembali ke direktori root proyek untuk mengonfigurasi aplikasi React Native:
-```bash
-cd ..
-```
+### 1. Gemini AI OCR Split Bill Flow
+A multi-step smart receipt parser and allocation mechanism:
+* **Step 1 (Participant Selection)**: Select friends from your suggested friends list or look up users by their unique username handle.
+* **Step 2 (Data Collection)**: Choose between entering items manually or using the AI OCR Camera Scan.
+* **Step 3 (Gemini 2.5 Flash OCR Processing)**: Uploading a receipt image reads it as a base64 string on the client and calls our backend API. The backend instructs Gemini 2.5 Flash via structured prompt guidelines to extract:
+  - Line items (name, unit price, quantity).
+  - Tax and Discount amounts (with fallback to 0.00 if absent).
+  - Receipt currency code (e.g., IDR, PHP, USD, SGD).
+  - Grand total bill amount.
+* **Step 4 (Editable Review & Verification)**: Presents the extracted receipt items in a modular list. Users can add new items, delete incorrect ones, change prices, edit quantities, adjust the currency, and correct the tax/discount fields.
+* **Step 5 (Proportional Cost Allocation)**:
+  - *Even split*: Total bill is divided equally among participants + yourself.
+  - *Itemized split*: Users tap an item and select exactly which participants share that item. 
+  - *Proportional Tax/Discount distribution formula*:
+    $$Subtotal_{user} = \sum (Price_i \times Qty_i)_{user}$$
+    $$Ratio_{user} = \frac{Subtotal_{user}}{Subtotal_{total}}$$
+    $$Tax_{user} = Tax_{total} \times Ratio_{user}$$
+    $$Discount_{user} = Discount_{total} \times Ratio_{user}$$
+    $$Total_{user} = Subtotal_{user} + Tax_{user} - Discount_{user}$$
+    This ensures that tax and discounts are distributed fairly and proportionally based on what each person actually ordered.
 
-### A. Install Dependencies
-Instal semua package frontend yang dibutuhkan:
-```bash
-npm install
-```
+### 2. Self-Healing Wallet Credential Management
+To solve cross-device session problems and local credential corruption:
+* If the local `SecureStore` keypair is empty or does not match the registered `stellarPublicKey` on the Firestore user profile (which happens when switching logged-in accounts on a single physical device), the application triggers a self-healing process.
+* The client attempts to recover the corresponding private key from the `stellarPrivateKey` backup field stored inside Firestore.
+* If a backup is not available, the client automatically generates a new cryptographic keypair, requests testnet funding from Friendbot, registers the public key and private key backup on Firestore, and initializes the USDC trustline. This ensures the user's wallet is always operational and in sync with the session token.
 
-### B. Konfigurasi File Environment (`.env`)
-Buat file `.env` baru di direktori root dengan menyalin file template:
-```bash
-cp .env.example .env
-```
-Buka file `.env` tersebut dan isi kredensial Firebase web Anda, konfigurasi SMTP, dan domain Anchor Stellar:
-*   `EXPO_PUBLIC_FIREBASE_API_KEY` s.d `_APP_ID`: Salin kredensial web SDK Anda dari Firebase Console.
-*   `EXPO_PUBLIC_ANCHOR_DOMAIN`: Atur ke **`testanchor.stellar.org`** untuk menggunakan sandbox pengujian resmi Stellar.
+### 3. Five-Strike Security Lockout Scheme
+To prevent brute-force attacks on sensitive transaction flows:
+* Custom failed PIN entry counters are tracked on the device's storage.
+* If the user enters an incorrect PIN on either the login screen or the transaction verification bottom sheet, the UI displays the remaining attempts (e.g., `Incorrect PIN. 4 attempts remaining.`).
+* Once the attempts reach 5, the app clears the user's Firestore PIN subcollection, sets `hasPin = false` on their user profile, deletes local keychain keys, alerts the user, and initiates an immediate auto-logout.
+
+### 4. Real-Time Horizon SSE (Server-Sent Events) Payment Listeners
+* Instead of running background setInterval polling, the client establishes an active event stream connection to the Stellar Horizon Server-Sent Events payment listener.
+* Any incoming or outgoing payments on-chain are intercepted in real-time, instantly updating the user's cached balances and transaction activity feed.
+
+### 5. ViewShot QR Code Card Exports
+* Because direct SVG-to-data-URL rendering crashes or outputs corrupted XDR streams on mobile devices running React Native's Hermes JavaScript engine, the application captures vouchers as native UI components.
+* It wraps QR receipts and personal address codes in a `ViewShot` container. Tapping Save or Share captures a high-resolution PNG image, saving it directly to the user's photo library or presenting the native sharing tray.
 
 ---
 
-## 3. Menjalankan Aplikasi Frontend
+## Folder Directory Mapping
 
-### 🌐 Menjalankan Versi Web (Web View)
-Untuk menguji dan menganalisis lalu lintas jaringan (*network logs*) di browser laptop dengan mudah, jalankan aplikasi sebagai website:
-```bash
-npm run web
-```
-Aplikasi akan langsung terbuka di browser Anda (biasanya pada alamat `http://localhost:8081`).
-
-### 📱 Menjalankan Versi Mobile (Expo Go)
-Untuk menguji aplikasi secara native di HP fisik (iOS/Android) atau simulator:
-```bash
-npx expo start
-```
-*   **Penting**: Jika Anda melakukan perubahan kode mendasar atau memodifikasi file polyfill di `index.js`, jalankan dengan flag `--clear` untuk membersihkan cache bundler:
-    ```bash
-    npx expo start --clear
-    ```
-*   Scan QR Code yang muncul di terminal Anda menggunakan aplikasi **Expo Go** (diunduh dari App Store / Play Store) untuk membuka aplikasi secara instan.
+- `/` (Root) — The frontend mobile application built with **React Native (Expo Go)**, NativeWind, and Reanimated v3.
+- `/backend` — Express.js REST API backend supporting Firestore operations and Gemini AI OCR integrations.
+- `/src` — Global store, hooks, configurations, and Stellar services.
 
 ---
 
-## 4. Perintah Verifikasi & Validasi Kode
+## Backend Configuration (`/backend`)
 
-Sebelum menyerahkan proyek Anda ke juri, jalankan alat verifikasi ini untuk memastikan tidak ada kesalahan:
+1. Navigate to the backend directory:
+   ```bash
+   cd backend
+   ```
+2. Install node dependencies:
+   ```bash
+   npm install
+   ```
+3. Set up the environment variables:
+   ```bash
+   cp .env.example .env
+   ```
+   Modify the `.env` file with these values:
+   - `PORT`: Server port (e.g., `5000`).
+   - `FIREBASE_SERVICE_ACCOUNT_PATH`: Path to your Firebase service account JSON key (e.g., `./serviceAccountKey.json`).
+   - `SMTP_EMAIL` and `SMTP_PASSWORD`: SMTP server credentials for user OTP code mail verification.
+   - `GEMINI_API_KEY`: API key for Google Gemini model processing.
+4. Add Firebase Service Account Key:
+   - Go to your Firebase Console -> Project Settings -> Service Accounts.
+   - Click "Generate new private key" to download the JSON credential.
+   - Save the file as **`serviceAccountKey.json`** directly inside the `backend/` folder.
+5. Run the server in development mode:
+   ```bash
+   npm run dev
+   ```
 
-*   **Pemeriksaan Tipe TypeScript**:
-    ```bash
-    npx tsc --noEmit
-    ```
-    *Pastikan output kosong (0 errors).*
+---
 
-*   **Pemeriksaan Kesehatan Konfigurasi Expo**:
-    ```bash
-    npx expo-doctor
-    ```
-    *Pastikan semua checklist (18/18 checks) lolos.*
+## Mobile Client Setup (Root Directory)
+
+1. Return to the root directory and install packages:
+   ```bash
+   npm install
+   ```
+2. Configure the frontend environment:
+   ```bash
+   cp .env.example .env
+   ```
+   Fill in your Firebase Web App SDK keys (`EXPO_PUBLIC_FIREBASE_API_KEY` through `_APP_ID`) and the Anchor domain (`EXPO_PUBLIC_ANCHOR_DOMAIN`).
+3. Start the bundler:
+   - **Web Interface**:
+     ```bash
+     npm run web
+     ```
+   - **Native Device (Expo Go)**:
+     ```bash
+     npx expo start --clear
+     ```
+     Scan the terminal's QR code using the **Expo Go** application on your physical device to run the app.
+
+---
+
+## Code Quality Verification Commands
+
+Verify that the codebase meets clean compilation standards prior to submission:
+- **TypeScript Type Verification**:
+  ```bash
+  npx tsc --noEmit
+  ```
+  *(Should return 0 errors)*
+- **Expo Configuration Health Check**:
+  ```bash
+  npx expo-doctor
+  ```
+  *(Should complete with all checks passing)*
+
+

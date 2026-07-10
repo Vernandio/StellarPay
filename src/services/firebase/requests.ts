@@ -22,6 +22,12 @@ export interface PaymentRequest {
   requestedAmount?: string;   // Optional local display amount (e.g. "90000")
   createdAt: Timestamp;
   txHash?: string;            // Filled when paid
+  splitItems?: { name: string; price: number; qty: number }[];
+  taxAmount?: string;
+  serviceAmount?: string;
+  tipsAmount?: string;
+  discountAmount?: string;
+  subtotalAmount?: string;
 }
 
 /**

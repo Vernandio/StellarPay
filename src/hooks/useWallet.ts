@@ -43,14 +43,26 @@ export const useWallet = () => {
   // Realtime balance sync
   useEffect(() => {
     if (!publicKey) return;
-    const unsubscribe = streamPayments(publicKey, (payment) => {
+    const unsubscribeStellar = streamPayments(publicKey, (payment) => {
       console.log("New blockchain payment detected, refreshing balance...");
       refreshBalances();
     });
+
+    // Subscribing to Firestore notifications for reliable cross-device real-time balance sync
+    let unsubscribeFirestore = () => {};
+    if (user?.uid) {
+      const { subscribeToNotifications } = require("../services/firebase/notifications");
+      unsubscribeFirestore = subscribeToNotifications(user.uid, () => {
+        console.log("New Firestore notification detected, refreshing balance...");
+        refreshBalances();
+      });
+    }
+
     return () => {
-      unsubscribe();
+      unsubscribeStellar();
+      unsubscribeFirestore();
     };
-  }, [publicKey, refreshBalances]);
+  }, [publicKey, user?.uid, refreshBalances]);
 
   return { 
     publicKey, xlmBalance, usdcBalance, isLoadingBalance, 

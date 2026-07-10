@@ -227,7 +227,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
           {/* Header */}
           <View style={styles.header}>
             <Text style={[Typography.headingMedium, { color: Colors.textPrimary }]}>
-              {transactionType === "deposit" ? "Add Money (Onramp)" : "Withdraw (Offramp)"}
+              {transactionType === "deposit" ? "Add Money" : "Withdraw"}
             </Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Feather name="x" size={24} color={Colors.textSecondary} />

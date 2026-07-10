@@ -55,18 +55,94 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
       setError("");
       try {
         const token = await auth.currentUser?.getIdToken();
-        const res = await fetch(`${API_BASE}/api/pin/verify`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ pin: fullPin }),
-        });
+        let res;
+        try {
+          res = await fetch(`${API_BASE}/api/pin/verify`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify({ pin: fullPin }),
+          });
+        } catch (netErr) {
+          // Network / Connection Error (e.g. Server down, offline)
+          setPin("");
+          setError("Network Error. Please try again later.");
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          return;
+        }
+
+        // Handle non-OK status codes
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          
+          // Only count client validation/authentication failures as incorrect PIN attempts
+          if (res.status === 401 || res.status === 400 || res.status === 404) {
+            setPin("");
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+            shakeX.value = withSequence(
+              withTiming(-12, { duration: 50 }),
+              withTiming(12, { duration: 50 }),
+              withTiming(-12, { duration: 50 }),
+              withTiming(12, { duration: 50 }),
+              withTiming(0, { duration: 50 })
+            );
+
+            // Handle 5 failed attempts
+            try {
+              const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
+              const count = attemptsStr ? parseInt(attemptsStr) : 0;
+              const newCount = count + 1;
+              
+              if (newCount >= 5) {
+                await AsyncStorage.removeItem("failed_pin_attempts");
+                setError("Incorrect PIN. Account locked.");
+                sheetRef.current?.dismiss();
+                
+                if (auth.currentUser?.uid) {
+                  const uid = auth.currentUser.uid;
+                  // Reset PIN on backend/firestore
+                  await Promise.all([
+                    updateDoc(doc(db, "users", uid), { hasPin: false }),
+                    deleteDoc(doc(db, "users", uid, "security", "pin"))
+                  ]);
+                }
+                
+                Alert.alert(
+                  "Account Locked & Logged Out",
+                  "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
+                  [{ 
+                    text: "OK", 
+                    onPress: async () => {
+                      try {
+                        await auth.signOut();
+                        router.replace("/(auth)/login");
+                      } catch (sErr) {
+                        console.error("Sign out failed from sheet:", sErr);
+                      }
+                    } 
+                  }]
+                );
+              } else {
+                await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
+                setError(`${data.error || "Incorrect PIN"}. ${5 - newCount} attempts remaining.`);
+              }
+            } catch (innerErr) {
+              setError(data.error || "Incorrect PIN");
+            }
+          } else {
+            // Internal Server / Gateway Errors (500, 502, 503)
+            setPin("");
+            setError("Server Error. Please try again later.");
+            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          }
+          return;
+        }
 
         const data = await res.json();
 
-        if (res.ok && data.valid) {
+        if (data.valid) {
           await AsyncStorage.removeItem("failed_pin_attempts");
           setVerified(true);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,61 +151,14 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
             onSuccess();
           }, 600);
         } else {
-          throw new Error(data.error || "Incorrect PIN");
+          setPin("");
+          setError("Incorrect PIN");
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         }
       } catch (err: any) {
         setPin("");
+        setError("An unexpected error occurred.");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        shakeX.value = withSequence(
-          withTiming(-12, { duration: 50 }),
-          withTiming(12, { duration: 50 }),
-          withTiming(-12, { duration: 50 }),
-          withTiming(12, { duration: 50 }),
-          withTiming(0, { duration: 50 })
-        );
-
-        // Handle 5 failed attempts
-        try {
-          const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
-          const count = attemptsStr ? parseInt(attemptsStr) : 0;
-          const newCount = count + 1;
-          
-          if (newCount >= 5) {
-            await AsyncStorage.removeItem("failed_pin_attempts");
-            setError("Incorrect PIN. Account locked.");
-            sheetRef.current?.dismiss();
-            
-            if (auth.currentUser?.uid) {
-              const uid = auth.currentUser.uid;
-              // Reset PIN on backend/firestore
-              await Promise.all([
-                updateDoc(doc(db, "users", uid), { hasPin: false }),
-                deleteDoc(doc(db, "users", uid, "security", "pin"))
-              ]);
-            }
-            
-            Alert.alert(
-              "Account Locked & Logged Out",
-              "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
-              [{ 
-                text: "OK", 
-                onPress: async () => {
-                  try {
-                    await auth.signOut();
-                    router.replace("/(auth)/login");
-                  } catch (sErr) {
-                    console.error("Sign out failed from sheet:", sErr);
-                  }
-                } 
-              }]
-            );
-          } else {
-            await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
-            setError(`${err.message || "Incorrect PIN"}. ${5 - newCount} attempts remaining.`);
-          }
-        } catch (innerErr) {
-          setError(err.message || "Incorrect PIN");
-        }
       } finally {
         setIsVerifying(false);
       }

@@ -58,10 +58,12 @@ export const useTransactions = () => {
       // 3. Identify unique public keys to resolve dynamically from Firestore (for blockchain-only transactions)
       const keysToResolve = new Set<string>();
       records.forEach((record: any) => {
-        if (record.type === "payment" || record.type === "path_payment_strict_send" || record.type === "path_payment_strict_receive") {
+        if (record.type === "payment" || record.type === "path_payment_strict_send" || record.type === "path_payment_strict_receive" || record.type === "create_account") {
           const hasDbRecord = firestoreMap.has(record.transaction_hash);
           if (!hasDbRecord) {
-            const otherKey = record.from === publicKey ? record.to : record.from;
+            const otherKey = record.type === "create_account"
+              ? (record.funder === publicKey ? record.account : record.funder)
+              : (record.from === publicKey ? record.to : record.from);
             if (otherKey && otherKey !== publicKey && otherKey !== USDC_ASSET.issuer) {
               keysToResolve.add(otherKey);
             }
@@ -87,10 +89,11 @@ export const useTransactions = () => {
       }
 
       const parsed: Activity[] = records
-        .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive")
+        .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive" || r.type === "create_account")
         .map((record: any) => {
-          const isSender = record.from === publicKey;
-          const isReceiver = record.to === publicKey;
+          const isCreateAccount = record.type === "create_account";
+          const isSender = isCreateAccount ? record.funder === publicKey : record.from === publicKey;
+          const isReceiver = isCreateAccount ? record.account === publicKey : record.to === publicKey;
           
           let type: ActivityType = "sent";
           let isPositive = false;
@@ -122,7 +125,8 @@ export const useTransactions = () => {
             dateSection = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
           }
 
-          const amountFormatted = parseFloat(record.amount).toFixed(2);
+          const amountVal = isCreateAccount ? record.starting_balance : record.amount;
+          const amountFormatted = parseFloat(amountVal).toFixed(2);
           const prefix = isPositive ? "+" : "-";
 
           // Invisible-web3: everything is shown as money, never as a crypto
@@ -131,7 +135,9 @@ export const useTransactions = () => {
 
           // Check if we have beautiful P2P names from Firestore
           const dbRecord = firestoreMap.get(record.transaction_hash);
-          const otherKey = isSender ? record.to : record.from;
+          const otherKey = isSender 
+            ? (isCreateAccount ? record.account : record.to) 
+            : (isCreateAccount ? record.funder : record.from);
           const resolvedUser = resolvedUsersMap.get(otherKey);
 
           let title = "";
@@ -166,13 +172,17 @@ export const useTransactions = () => {
             if (isSender && isReceiver) {
               title = "Exchange";
             } else if (isReceiver) {
-              title = record.from === USDC_ASSET.issuer ? "Money Added" : "Received";
+              title = "Add Money from Anchor";
             } else {
-              title = record.to === USDC_ASSET.issuer ? "Money Withdrawn" : "Sent";
+              title = "Withdraw Money via Anchor";
             }
           }
 
+          // Format extra info: display truncated public key if no resolved handle (following agents rules)
           let extra = record.transaction_hash.substring(0, 8);
+          if (!resolvedUser && otherKey) {
+            extra = `${otherKey.substring(0, 4)}...${otherKey.substring(otherKey.length - 4)}`;
+          }
 
           return {
             id: record.id,
@@ -207,14 +217,26 @@ export const useTransactions = () => {
   // Realtime transactions sync
   useEffect(() => {
     if (!publicKey) return;
-    const unsubscribe = streamPayments(publicKey, (payment) => {
+    const unsubscribeStellar = streamPayments(publicKey, (payment) => {
       console.log("New blockchain payment detected, refreshing transactions list...");
       fetchTransactions();
     });
+
+    // Subscribing to Firestore notifications as a highly reliable fallback for P2P updates
+    let unsubscribeFirestore = () => {};
+    if (user?.uid) {
+      const { subscribeToNotifications } = require("../services/firebase/notifications");
+      unsubscribeFirestore = subscribeToNotifications(user.uid, () => {
+        console.log("New Firestore notification detected, refreshing transactions list...");
+        fetchTransactions();
+      });
+    }
+
     return () => {
-      unsubscribe();
+      unsubscribeStellar();
+      unsubscribeFirestore();
     };
-  }, [publicKey, fetchTransactions]);
+  }, [publicKey, user?.uid, fetchTransactions]);
 
   return { activities, isLoading, fetchTransactions };
 };

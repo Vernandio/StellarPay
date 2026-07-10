@@ -14,10 +14,15 @@ export const setupPin = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "PIN must be exactly 6 digits" });
     }
 
-    // Check if PIN already exists
+    // Check if user has active PIN flag in profile
+    const userDoc = await adminFirestore.collection("users").doc(uid).get();
+    const userData = userDoc.exists ? userDoc.data() : null;
+    const hasPinActive = userData?.hasPin === true;
+
+    // Check if PIN already exists and is active
     const securityRef = adminFirestore.collection("users").doc(uid).collection("security").doc("pin");
     const existing = await securityRef.get();
-    if (existing.exists) {
+    if (existing.exists && hasPinActive) {
       return res.status(409).json({ error: "PIN already set. Use change endpoint instead." });
     }
 

@@ -329,7 +329,7 @@ export default function PayScreen() {
                 <Feather name="grid" size={64} color={Colors.textLightPrimary} />
               </View>
               <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 4 }]}>Show QR Code</Text>
-              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Let others scan to pay you instantly</Text>
+              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Let others pay exactly what you ask</Text>
             </Pressable>
           </Animated.View>
         );

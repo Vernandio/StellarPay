@@ -17,7 +17,9 @@ import { CURRENCIES, Currency, getCurrencyByCode } from "../../src/constants/cur
 import { fetchExchangeRates, ExchangeRates, convertUSDTo } from "../../src/services/exchangeRates";
 import { useTransactions, Activity } from "../../src/hooks/useTransactions";
 import { useState, useRef, useCallback, useMemo, useEffect } from "react";
-import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
+import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView, BottomSheetScrollView } from "@gorhom/bottom-sheet";
+import { db } from "../../src/services/firebase/config";
+import { doc as fsDoc, getDoc, updateDoc } from "firebase/firestore";
 import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
 import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
 import { subscribeToPendingRequests, updatePaymentRequest, PaymentRequest } from "../../src/services/firebase/requests";
@@ -37,6 +39,8 @@ export default function WalletScreen() {
   const currency = getCurrencyByCode(displayCurrencyCode);
 
   const detailSheetRef = useRef<BottomSheetModal>(null);
+  const requestDetailSheetRef = useRef<BottomSheetModal>(null);
+  const requestItemsSheetRef = useRef<BottomSheetModal>(null);
   const viewShotRef = useRef<any>(null);
   const [selectedTx, setSelectedTx] = useState<Activity | null>(null);
 
@@ -44,6 +48,12 @@ export default function WalletScreen() {
     Haptics.selectionAsync();
     setSelectedTx(tx);
     detailSheetRef.current?.present();
+  };
+
+  const handleRequestPress = (req: PaymentRequest) => {
+    Haptics.selectionAsync();
+    setSelectedRequest(req);
+    requestDetailSheetRef.current?.present();
   };
 
   const handleShareReceipt = async () => {
@@ -73,10 +83,18 @@ export default function WalletScreen() {
   const [pendingRequests, setPendingRequests] = useState<PaymentRequest[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<PaymentRequest | null>(null);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+  const [isRestoringWallet, setIsRestoringWallet] = useState(false);
 
   const pinSheetRef = useRef<PinVerifySheetRef>(null);
   const navigation = useNavigation();
   const [refreshing, setRefreshing] = useState(false);
+  const [greeting, setGreeting] = useState("Hello");
+
+  useEffect(() => {
+    const greetings = ["Hello", "Hola", "Bonjour", "Ciao", "Konnichiwa", "Aloha", "Namaste", "Sawasdee", "Apa Kabar", "Shalom", "Olá", "Guten Tag", "Yasou"];
+    const randomIdx = Math.floor(Math.random() * greetings.length);
+    setGreeting(greetings[randomIdx]);
+  }, []);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -117,34 +135,65 @@ export default function WalletScreen() {
 
   useEffect(() => {
     const checkWalletKeypair = async () => {
-      if (!profile || !user || isProcessing) return;
+      if (!profile || !user || isProcessing || isRestoringWallet) return;
 
-      // Case 1: User has no registered public key at all
-      if (!profile.stellarPublicKey) {
+      const { loadKeypairFromSecureStore, storeKeypairSecurely, generateKeypair, fundTestnetAccount } = require("../../src/services/stellar/wallet");
+      
+      let keypair = await loadKeypairFromSecureStore(user.uid);
+      
+      const needsInitialization = !profile.stellarPublicKey;
+      const needsRestoration = profile.stellarPublicKey && (!keypair || keypair.publicKey() !== profile.stellarPublicKey);
+
+      if (needsInitialization) {
         console.log("No Stellar Wallet found for logged-in user. Automatically creating wallet...");
         await initializeWallet();
         return;
       }
 
-      // Case 2: User has a registered public key, verify keypair integrity
-      const { loadKeypairFromSecureStore } = require("../../src/services/stellar/wallet");
-      const keypair = await loadKeypairFromSecureStore(user.uid);
-      if (!keypair) {
-        console.warn("Stellar keypair is missing locally and cannot be restored from backup.");
-        return;
-      }
+      if (needsRestoration) {
+        console.log("Local keypair is missing or mismatching. Attempting to restore or re-initialize...");
+        setIsRestoringWallet(true);
+        try {
+          // Try to restore from firestore stellarPrivateKey
+          const userDoc = await getDoc(fsDoc(db, "users", user.uid));
+          const userData = userDoc.exists() ? userDoc.data() : null;
 
-      // Case 3: Keypair exists but its public key doesn't match the registered one
-      if (keypair.publicKey() !== profile.stellarPublicKey) {
-        console.warn(`Keypair public key mismatch! Local: ${keypair.publicKey()}, Profile: ${profile.stellarPublicKey}`);
-        return;
+          if (userData && userData.stellarPrivateKey) {
+            const { Keypair } = require("@stellar/stellar-sdk");
+            const restoredKeypair = Keypair.fromSecret(userData.stellarPrivateKey);
+            if (restoredKeypair.publicKey() === profile.stellarPublicKey) {
+              await storeKeypairSecurely(user.uid, restoredKeypair);
+              console.log("Successfully restored matching keypair from Firestore backup!");
+              setIsRestoringWallet(false);
+              return;
+            }
+          }
+          
+          // If restoration unavailable or mismatched, re-initialize a new working keypair
+          console.log("Restoration unavailable or mismatch. Generating a new working keypair...");
+          const newKeypair = await generateKeypair();
+          await fundTestnetAccount(newKeypair.publicKey());
+          await storeKeypairSecurely(user.uid, newKeypair);
+          
+          // Update Firestore
+          await updateDoc(fsDoc(db, "users", user.uid), {
+            stellarPublicKey: newKeypair.publicKey(),
+            stellarPrivateKey: newKeypair.secret(),
+            hasUSDCTrustline: false
+          });
+          console.log("Re-initialized new Stellar keypair successfully.");
+        } catch (err) {
+          console.error("Failed to restore or re-initialize wallet:", err);
+        } finally {
+          setIsRestoringWallet(false);
+        }
       }
     };
 
     checkWalletKeypair().catch((err) => {
       console.error("Wallet keypair validation failed:", err);
     });
-  }, [profile, isProcessing]);
+  }, [profile, isProcessing, isRestoringWallet]);
 
   const handlePayRequest = (req: PaymentRequest) => {
     setSelectedRequest(req);
@@ -299,8 +348,8 @@ export default function WalletScreen() {
 
           {/* Greeting */}
           <Animated.View entering={FadeInDown.duration(300).delay(100)} style={{ paddingHorizontal: Spacing.lg, marginTop: Spacing.xl, marginBottom: Spacing.xl }}>
-            <Text style={[Typography.bodyMedium, { color: Colors.textSecondary, marginBottom: Spacing.xs }]}>Good Morning,</Text>
-            <Text style={[Typography.displayMedium, { color: Colors.white }]}>{profile?.displayName || "Alex"} 👋</Text>
+            <Text style={[Typography.bodyMedium, { color: Colors.textSecondary, marginBottom: Spacing.xs }]}>{greeting},</Text>
+            <Text style={[Typography.displayMedium, { color: Colors.white }]}>{profile?.displayName || "Alex"}</Text>
           </Animated.View>
 
           {/* Balance Card */}
@@ -415,28 +464,33 @@ export default function WalletScreen() {
                           borderBottomColor: Colors.borderLight,
                         }}
                       >
-                        <View style={{ flex: 1 }}>
-                          <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.senderDisplayName}</Text>
-                          <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 2 }]} numberOfLines={1}>
-                            {item.message || "Requested money"}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: "flex-end", marginRight: Spacing.md }}>
-                          <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
-                            {currency.symbol}
-                            {localAmount}
-                          </Text>
-                          {item.requestedCurrency && item.requestedCurrency !== currency.code ? (
-                            <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
-                              {item.requestedCurrency}{" "}
-                              {parseFloat(item.requestedAmount || "0").toLocaleString(undefined, {
-                                minimumFractionDigits: item.requestedCurrency === "VND" || item.requestedCurrency === "IDR" ? 0 : 2,
-                              })}
+                        <Pressable
+                          onPress={() => handleRequestPress(item)}
+                          style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.senderDisplayName}</Text>
+                            <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 2 }]} numberOfLines={1}>
+                              {item.message || "Requested money"}
                             </Text>
-                          ) : currency.code !== "USD" ? (
-                            <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>${parseFloat(item.amountUSD).toFixed(2)}</Text>
-                          ) : null}
-                        </View>
+                          </View>
+                          <View style={{ alignItems: "flex-end", marginRight: Spacing.md }}>
+                            <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
+                              {currency.symbol}
+                              {localAmount}
+                            </Text>
+                            {item.requestedCurrency && item.requestedCurrency !== currency.code ? (
+                              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                                {item.requestedCurrency}{" "}
+                                {parseFloat(item.requestedAmount || "0").toLocaleString(undefined, {
+                                  minimumFractionDigits: item.requestedCurrency === "VND" || item.requestedCurrency === "IDR" ? 0 : 2,
+                                })}
+                              </Text>
+                            ) : currency.code !== "USD" ? (
+                              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>${parseFloat(item.amountUSD).toFixed(2)}</Text>
+                            ) : null}
+                          </View>
+                        </Pressable>
                         <View style={{ flexDirection: "row", gap: Spacing.xs }}>
                           <TouchableOpacity
                             onPress={() => handleDeclineRequest(item)}
@@ -688,8 +742,255 @@ export default function WalletScreen() {
           </BottomSheetView>
         )}
       </BottomSheetModal>
-      <InteractiveAnchorModal visible={isAnchorModalVisible} onClose={() => setIsAnchorModalVisible(false)} transactionType={anchorTxType} onSuccess={refreshBalances} />
+      <InteractiveAnchorModal
+        visible={isAnchorModalVisible}
+        onClose={() => setIsAnchorModalVisible(false)}
+        transactionType={anchorTxType}
+        onSuccess={async () => {
+          await Promise.all([refreshBalances(), fetchTransactions()]);
+        }}
+      />
       <PinVerifySheet ref={pinSheetRef} onSuccess={handleExecutePayment} />
+
+      {/* Request Details Sheet */}
+      <BottomSheetModal
+        ref={requestDetailSheetRef}
+        enableDynamicSizing={true}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
+      >
+        {selectedRequest && (
+          <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.lg }}>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 20 }]}>
+                Payment Request Details
+              </Text>
+            </View>
+
+            {/* Main Info Card */}
+            <View style={{ alignItems: "center", marginBottom: Spacing.xl }}>
+              <View style={{
+                width: 64, height: 64, borderRadius: 32,
+                backgroundColor: "rgba(123, 97, 255, 0.1)",
+                justifyContent: "center", alignItems: "center",
+                marginBottom: Spacing.md
+              }}>
+                <Feather
+                  name="download"
+                  size={28}
+                  color={Colors.primary}
+                />
+              </View>
+              
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 24, marginBottom: 2 }]}>
+                {selectedRequest.senderDisplayName}
+              </Text>
+              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: 6 }]}>
+                @{selectedRequest.senderUsername}
+              </Text>
+              
+              {/* Large display fiat amount */}
+              <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, fontWeight: "800", fontSize: 32, marginVertical: 6 }]}>
+                {selectedRequest.requestedCurrency && selectedRequest.requestedAmount
+                  ? `${selectedRequest.requestedCurrency} ${selectedRequest.requestedAmount}`
+                  : `${currency.symbol}${rates ? convertUSDTo(parseFloat(selectedRequest.amountUSD), currency.code as keyof ExchangeRates, rates) : selectedRequest.amountUSD}`}
+              </Text>
+
+              {currency.code !== "USD" && !selectedRequest.requestedCurrency && (
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
+                  = ${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD
+                </Text>
+              )}
+            </View>
+
+            {/* Request info list */}
+            <View style={{ backgroundColor: Colors.baseLight, borderRadius: 16, padding: Spacing.lg, marginBottom: Spacing.md }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Status</Text>
+                <View style={{ backgroundColor: "rgba(240, 165, 0, 0.1)", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                  <Text style={[Typography.labelSmall, { color: Colors.amber, fontWeight: "700" }]}>Pending</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Date</Text>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
+                  {selectedRequest.createdAt ? new Date(selectedRequest.createdAt.seconds * 1000).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) : ""}
+                </Text>
+              </View>
+
+              <View style={{ height: 1, backgroundColor: Colors.borderLightStrong, marginVertical: Spacing.xs, marginBottom: Spacing.md }} />
+
+              {/* Message / Note Row */}
+              <View style={{ marginTop: Spacing.xs }}>
+                <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: 6 }]}>Note</Text>
+                <View style={{ backgroundColor: Colors.white, borderRadius: 12, padding: Spacing.md, borderWidth: 1, borderColor: Colors.borderLight }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary }]}>
+                    {selectedRequest.message || "Requested money"}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Detailed Split Items button link if present */}
+            {selectedRequest.splitItems && selectedRequest.splitItems.length > 0 && (
+              <Pressable
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  requestItemsSheetRef.current?.present();
+                }}
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  backgroundColor: Colors.white,
+                  borderRadius: 16,
+                  padding: Spacing.md,
+                  borderWidth: 1,
+                  borderColor: Colors.borderLight,
+                  marginBottom: Spacing.md
+                }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <View style={{
+                    width: 36, height: 36, borderRadius: 18,
+                    backgroundColor: "rgba(123, 97, 255, 0.1)",
+                    justifyContent: "center", alignItems: "center",
+                    marginRight: Spacing.md
+                  }}>
+                    <Feather name="list" size={18} color={Colors.primary} />
+                  </View>
+                  <View>
+                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
+                      View Split Items
+                    </Text>
+                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, fontSize: 11 }]}>
+                      {selectedRequest.splitItems?.length} items assigned to you
+                    </Text>
+                  </View>
+                </View>
+                <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
+              </Pressable>
+            )}
+
+            {/* Action Buttons Row */}
+            <View style={{ flexDirection: "row", gap: Spacing.md }}>
+              <TouchableOpacity
+                onPress={() => {
+                  requestDetailSheetRef.current?.dismiss();
+                  handleDeclineRequest(selectedRequest);
+                }}
+                style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
+              >
+                <Feather name="x" size={16} color={Colors.danger} style={{ marginRight: 8 }} />
+                <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>Decline</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  requestDetailSheetRef.current?.dismiss();
+                  handlePayRequest(selectedRequest);
+                }}
+                style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center", flexDirection: "row" }}
+              >
+                <Feather name="check" size={16} color={Colors.white} style={{ marginRight: 8 }} />
+                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Pay Now</Text>
+              </TouchableOpacity>
+            </View>
+          </BottomSheetView>
+        )}
+      </BottomSheetModal>
+
+      {/* Split Items Details Sheet */}
+      <BottomSheetModal
+        ref={requestItemsSheetRef}
+        snapPoints={["50%", "80%"]}
+        backdropComponent={renderBackdrop}
+        backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
+        handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
+        enablePanDownToClose={true}
+      >
+        {selectedRequest && selectedRequest.splitItems && (
+          <BottomSheetScrollView contentContainerStyle={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl }}>
+            {/* Header */}
+            <View style={{ alignItems: "center", marginTop: Spacing.sm, marginBottom: Spacing.lg }}>
+              <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 20 }]}>
+                Split Items Breakdown
+              </Text>
+              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 4 }]}>
+                Items assigned to you by @{selectedRequest.senderUsername}
+              </Text>
+            </View>
+
+            {/* Items List */}
+            <View style={{ backgroundColor: Colors.baseLight, borderRadius: 16, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, marginBottom: Spacing.md }}>
+              {selectedRequest.splitItems?.map((item: any, idx: number) => (
+                <View key={idx} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: Spacing.md, borderBottomWidth: idx === (selectedRequest.splitItems?.length || 0) - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, flex: 1, fontWeight: "500" }]}>
+                    {item.qty}x {item.name}
+                  </Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                    {selectedRequest.requestedCurrency || "USD"} {(item.price * item.qty).toFixed(2)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+
+            {/* Summary Panel */}
+            <View style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.md, borderWidth: 1, borderColor: Colors.borderLight }}>
+              {selectedRequest.subtotalAmount && (
+                <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Subtotal</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                    {selectedRequest.requestedCurrency || "USD"} {selectedRequest.subtotalAmount}
+                  </Text>
+                </View>
+              )}
+
+              {/* Proportional Fees/Tax */}
+              {(parseFloat(selectedRequest.taxAmount || "0") > 0 ||
+                parseFloat(selectedRequest.serviceAmount || "0") > 0 ||
+                parseFloat(selectedRequest.tipsAmount || "0") > 0 ||
+                parseFloat(selectedRequest.discountAmount || "0") > 0) && (
+                <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 }}>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Proportional Fees & Taxes</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                    {selectedRequest.requestedCurrency || "USD"} {(
+                      parseFloat(selectedRequest.taxAmount || "0") +
+                      parseFloat(selectedRequest.serviceAmount || "0") +
+                      parseFloat(selectedRequest.tipsAmount || "0") -
+                      parseFloat(selectedRequest.discountAmount || "0")
+                    ).toFixed(2)}
+                  </Text>
+                </View>
+              )}
+
+              <View style={{ height: 1, backgroundColor: Colors.borderLight, marginVertical: Spacing.sm }} />
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>Total Due</Text>
+                <Text style={[Typography.headingMedium, { color: Colors.teal, fontWeight: "800", fontSize: 20 }]}>
+                  {selectedRequest.requestedCurrency || "USD"} {selectedRequest.requestedAmount}
+                </Text>
+              </View>
+            </View>
+
+            {/* Close button */}
+            <TouchableOpacity
+              onPress={() => {
+                requestItemsSheetRef.current?.dismiss();
+                requestDetailSheetRef.current?.present();
+              }}
+              style={{ backgroundColor: Colors.textLightPrimary, borderRadius: 24, paddingVertical: 14, alignItems: "center", marginTop: Spacing.xl }}
+            >
+              <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Go Back</Text>
+            </TouchableOpacity>
+          </BottomSheetScrollView>
+        )}
+      </BottomSheetModal>
     </View>
   );
 }
