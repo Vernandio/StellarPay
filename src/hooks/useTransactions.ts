@@ -172,9 +172,9 @@ export const useTransactions = () => {
             if (isSender && isReceiver) {
               title = "Exchange";
             } else if (isReceiver) {
-              title = "Add Money from Anchor";
+              title = "Stellar Deposit";
             } else {
-              title = "Withdraw Money via Anchor";
+              title = "Stellar Withdrawal";
             }
           }
 

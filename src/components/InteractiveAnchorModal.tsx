@@ -19,6 +19,59 @@ import {
 } from "../services/stellar/anchor";
 import { setupUSDCTrustline, checkUSDCTrustlineExists } from "../services/stellar/wallet";
 import { USDC_ASSET } from "../constants/stellar";
+import { saveTransaction } from "../services/firebase/transactions";
+
+// Detached background polling loop to write transaction data to Firestore when completed, even if modal is closed
+const startBackgroundPolling = (
+  transferServer: string,
+  token: string,
+  transactionId: string,
+  transactionType: "deposit" | "withdraw",
+  userUid: string,
+  username: string,
+  displayName: string
+) => {
+  console.log(`[Background Anchor Polling] Starting detached polling for transaction ${transactionId}...`);
+  const interval = setInterval(async () => {
+    try {
+      const tx = await pollTransactionStatus(transferServer, token, transactionId);
+      console.log(`[Background Anchor Polling] Status for ${transactionId}:`, tx.status);
+
+      if (tx.status === "completed") {
+        clearInterval(interval);
+        
+        const amountVal = tx.amount_in || tx.amount_out || "0.00";
+        const txHash = tx.stellar_transaction_id || tx.id;
+
+        await saveTransaction({
+          hash: txHash,
+          senderUid: transactionType === "deposit" ? "anchor" : userUid,
+          senderUsername: transactionType === "deposit" ? "anchor" : username,
+          senderDisplayName: transactionType === "deposit" ? "Stellar Deposit" : displayName,
+          receiverUid: transactionType === "deposit" ? userUid : "anchor",
+          receiverUsername: transactionType === "deposit" ? username : "anchor",
+          receiverDisplayName: transactionType === "deposit" ? displayName : "Stellar Withdrawal",
+          amountUSD: parseFloat(amountVal).toFixed(2),
+          displayCurrency: "USD",
+          displayAmount: parseFloat(amountVal).toFixed(2),
+          memo: transactionType === "deposit" ? "Deposit USD via Anchor" : "Withdraw USD via Anchor",
+          status: "completed",
+        });
+        console.log(`[Background Anchor Polling] Saved completed transfer ${txHash} to Firestore!`);
+      } else if (tx.status === "error" || tx.status === "no_market" || tx.status === "too_small") {
+        clearInterval(interval);
+      }
+    } catch (err) {
+      console.error(`[Background Anchor Polling] Polling failed:`, err);
+      clearInterval(interval);
+    }
+  }, 5000);
+
+  // Auto-clear after 5 minutes to prevent memory leak
+  setTimeout(() => {
+    clearInterval(interval);
+  }, 300000);
+};
 interface InteractiveAnchorModalProps {
   visible: boolean;
   onClose: () => void;
@@ -40,6 +93,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
   const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
   const pollingRef = useRef<NodeJS.Timeout | null>(null);
+  const activeTxDetailsRef = useRef<any>(null);
   const isPayingRef = useRef(false);
 
   useEffect(() => {
@@ -59,6 +113,12 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
+
+      // Spawn background polling loop to complete write on-chain transfers in background
+      if (activeTxDetailsRef.current) {
+        const { server, token, txId, type, uid, username, displayName } = activeTxDetailsRef.current;
+        startBackgroundPolling(server, token, txId, type, uid, username, displayName);
+      }
     }
     setInitLoading(true);
     setInteractiveUrl(null);
@@ -128,6 +188,16 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
   };
 
   const startPolling = (transferServer: string, token: string, transactionId: string) => {
+    activeTxDetailsRef.current = {
+      server: transferServer,
+      token,
+      txId: transactionId,
+      type: transactionType,
+      uid: user?.uid || "",
+      username: profile?.username || "",
+      displayName: profile?.displayName || profile?.username || "",
+    };
+
     if (pollingRef.current) clearInterval(pollingRef.current);
 
     pollingRef.current = (setInterval as any)(async () => {
@@ -144,6 +214,31 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
         console.log(`SEP-24 Polling Status for ${transactionId}:`, tx.status);
 
         if (tx.status === "completed") {
+          activeTxDetailsRef.current = null; // Prevent background polling
+          // Record the completed deposit/withdrawal transaction in Firestore so it lists immediately in the app activity
+          try {
+            const amountVal = tx.amount_in || tx.amount_out || "0.00";
+            const txHash = tx.stellar_transaction_id || tx.id;
+            
+            await saveTransaction({
+              hash: txHash,
+              senderUid: transactionType === "deposit" ? "anchor" : (user?.uid || ""),
+              senderUsername: transactionType === "deposit" ? "anchor" : (profile?.username || ""),
+              senderDisplayName: transactionType === "deposit" ? "Stellar Deposit" : (profile?.displayName || profile?.username || ""),
+              receiverUid: transactionType === "deposit" ? (user?.uid || "") : "anchor",
+              receiverUsername: transactionType === "deposit" ? (profile?.username || "") : "anchor",
+              receiverDisplayName: transactionType === "deposit" ? (profile?.displayName || profile?.username || "") : "Stellar Withdrawal",
+              amountUSD: parseFloat(amountVal).toFixed(2),
+              displayCurrency: "USD",
+              displayAmount: parseFloat(amountVal).toFixed(2),
+              memo: transactionType === "deposit" ? "Deposit USD via Anchor" : "Withdraw USD via Anchor",
+              status: "completed",
+            });
+            console.log("Recorded completed anchor transfer in Firestore!");
+          } catch (fsErr) {
+            console.warn("Failed to write anchor transfer to Firestore:", fsErr);
+          }
+
           handleSuccess();
         } else if (tx.status === "pending_user_transfer_start" && transactionType === "withdraw") {
           // Automatic offramp transaction processing
@@ -198,6 +293,7 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
   };
 
   const handleSuccess = async () => {
+    activeTxDetailsRef.current = null; // Prevent background polling
     if (pollingRef.current) {
       clearInterval(pollingRef.current);
       pollingRef.current = null;
