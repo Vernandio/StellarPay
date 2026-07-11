@@ -147,7 +147,7 @@ export default function VerifyPhoneScreen() {
         rawPhoneFinal = rawPhoneFinal.substring(1);
       }
       let finalFormattedPhone = rawPhoneFinal.startsWith("+") ? rawPhoneFinal : `${countryCode}${rawPhoneFinal}`;
-      await updateUserProfile(user.uid, { phone: finalFormattedPhone });
+      await updateUserProfile(user.uid, { phone: finalFormattedPhone, countryCode });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       

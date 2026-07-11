@@ -59,6 +59,9 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [countryCode, setCountryCode] = useState("+62");
+  // Full E.164 number (e.g. "+62812...") computed & validated in handleSendOtp,
+  // persisted to Firestore in handleSignUp.
+  const [phoneE164, setPhoneE164] = useState("");
   const [showCountryPicker, setShowCountryPicker] = useState(false);
 
   const COUNTRIES = [
@@ -132,6 +135,9 @@ export default function SignUpScreen() {
       let formattedPhone = rawPhone.startsWith("+")
         ? rawPhone
         : `${countryCode}${rawPhone}`;
+
+      // Remember the validated E.164 number so handleSignUp can persist it.
+      setPhoneE164(formattedPhone);
 
       // Make sure email, username, and phone aren't already registered
       const availability = await checkAvailability({
@@ -234,8 +240,8 @@ export default function SignUpScreen() {
       // 1. Link email and PIN password to the signed-in phone account
       await linkEmailToAccount(email, pinPassword);
 
-      // 2. Create the user profile inside Firestore
-      await createPhoneUserProfile(user, username, email, displayName);
+      // 2. Create the user profile inside Firestore (incl. phone + dial code)
+      await createPhoneUserProfile(user, username, email, displayName, phoneE164 || null, countryCode);
 
       // 3. Automatically create Stellar Wallet & fund it on Testnet
       try {

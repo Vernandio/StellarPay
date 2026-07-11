@@ -13,6 +13,8 @@ export interface UserProfile {
   username: string;
   displayName: string;
   phone: string | null;
+  /** Dial code selected at signup, e.g. "+62". Stored alongside the full E.164 `phone`. */
+  countryCode?: string | null;
   stellarPublicKey: string | null;
   avatarUrl?: string;
   authProviders?: string[];

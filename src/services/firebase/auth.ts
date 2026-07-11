@@ -94,14 +94,19 @@ export const createPhoneUserProfile = async (
   user: User,
   username: string,
   email: string,
-  displayName: string
+  displayName: string,
+  phone: string | null = null,
+  countryCode: string | null = null
 ) => {
   await setDoc(doc(db, "users", user.uid), {
     uid: user.uid,
     email,
     username: username.toLowerCase(),
     displayName: displayName.trim() || username,
-    phone: user.phoneNumber,
+    // This flow authenticates via email OTP, so user.phoneNumber is null —
+    // persist the number the user typed at signup (E.164) and its dial code.
+    phone: phone || user.phoneNumber,
+    countryCode,
     stellarPublicKey: null,
     authProviders: user.providerData.map((p) => p.providerId),
     hasPin: false,
