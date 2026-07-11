@@ -40,7 +40,12 @@ const startBackgroundPolling = (
       if (tx.status === "completed") {
         clearInterval(interval);
         
-        const amountVal = tx.amount_in || tx.amount_out || "0.00";
+        // Use the amount that actually moved through the wallet: net asset delivered
+        // (amount_out) for deposits, asset sent (amount_in) for withdrawals — not the
+        // gross fiat amount, which excludes the anchor fee.
+        const amountVal = transactionType === "deposit"
+          ? (tx.amount_out || tx.amount_in || "0.00")
+          : (tx.amount_in || tx.amount_out || "0.00");
         const txHash = tx.stellar_transaction_id || tx.id;
 
         await saveTransaction({
@@ -217,7 +222,12 @@ export const InteractiveAnchorModal: React.FC<InteractiveAnchorModalProps> = ({
           activeTxDetailsRef.current = null; // Prevent background polling
           // Record the completed deposit/withdrawal transaction in Firestore so it lists immediately in the app activity
           try {
-            const amountVal = tx.amount_in || tx.amount_out || "0.00";
+            // Use the amount that actually moved through the wallet: net asset delivered
+            // (amount_out) for deposits, asset sent (amount_in) for withdrawals — not the
+            // gross fiat amount, which excludes the anchor fee.
+            const amountVal = transactionType === "deposit"
+              ? (tx.amount_out || tx.amount_in || "0.00")
+              : (tx.amount_in || tx.amount_out || "0.00");
             const txHash = tx.stellar_transaction_id || tx.id;
             
             await saveTransaction({
