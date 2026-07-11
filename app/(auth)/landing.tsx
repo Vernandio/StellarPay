@@ -7,8 +7,14 @@ import * as Haptics from "expo-haptics";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Spacing } from "../../src/constants/spacing";
+import { getContentWidth } from "../../src/constants/layout";
 
-const { width, height } = Dimensions.get("window");
+const { height } = Dimensions.get("window");
+// Use the clamped content width (not the raw window width) so each carousel
+// page matches the actual visible column on web, where the app is centered
+// in a fixed-width frame — otherwise pagingEnabled pages never line up and
+// the ScrollView appears frozen / the slides don't show.
+const width = getContentWidth();
 
 const BTN_HEIGHT = 56;
 const BTN_RADIUS = 24;

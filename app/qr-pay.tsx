@@ -257,7 +257,7 @@ export default function QRPayScreen() {
                     keyboardType="decimal-pad"
                     placeholder="0.00"
                     placeholderTextColor={Colors.textLightSecondary}
-                    style={[Typography.displayLarge, { fontSize: 36, color: Colors.textLightPrimary, flex: 1, padding: 0 }]}
+                    style={[Typography.displayLarge, { fontSize: 36, color: Colors.textLightPrimary, flex: 1, minWidth: 0, padding: 0 }]}
                     selectionColor={Colors.teal}
                   />
                 </View>

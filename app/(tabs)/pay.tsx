@@ -15,7 +15,6 @@ import QRCode from "react-native-qrcode-svg";
 import { fetchExchangeRates, ExchangeRates } from "../../src/services/exchangeRates";
 import { createPaymentRequest } from "../../src/services/firebase/requests";
 import { useWallet } from "../../src/hooks/useWallet";
-import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as MediaLibrary from 'expo-media-library';
 import ViewShot from 'react-native-view-shot';

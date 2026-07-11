@@ -337,11 +337,15 @@ export default function WalletScreen() {
                 />
               </Pressable>
 
-              <Pressable onPress={() => router.push("/(tabs)/profile")} style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden" }}>
-                <Image
-                  source={profile?.avatarUrl ? { uri: profile.avatarUrl } : require("../../assets/images/avatar.png")}
-                  style={{ width: "100%", height: "100%", backgroundColor: Colors.surface }}
-                />
+              <Pressable
+                onPress={() => router.push("/(tabs)/profile")}
+                style={{ width: 40, height: 40, borderRadius: 20, overflow: "hidden", backgroundColor: Colors.surface, justifyContent: "center", alignItems: "center" }}
+              >
+                {profile?.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                ) : (
+                  <Feather name="user" size={20} color={Colors.white} />
+                )}
               </Pressable>
             </View>
           </Animated.View>

@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useCallback } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Share, RefreshControl, Modal, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Share, RefreshControl } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
@@ -10,7 +10,7 @@ import * as Haptics from "expo-haptics";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
-import DateTimePicker from '@react-native-community/datetimepicker';
+import { DateField } from "../../src/components/ui/DateField";
 
 import { useTransactions, Activity } from "../../src/hooks/useTransactions";
 
@@ -21,8 +21,6 @@ export default function ActivityScreen() {
   const [showDateFilter, setShowDateFilter] = useState(false);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
   const { activities, isLoading, fetchTransactions } = useTransactions();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -200,53 +198,19 @@ export default function ActivityScreen() {
             </View>
 
             <View style={{ flexDirection: "row", alignItems: "center", gap: Spacing.sm }}>
-              <Pressable
-                onPress={() => setShowStartPicker(true)}
-                style={{ 
-                  flex: 1, 
-                  backgroundColor: Colors.baseLight, 
-                  borderRadius: 12, 
-                  padding: Spacing.md, 
-                  borderWidth: 1, 
-                  borderColor: startDate ? Colors.primary : Colors.borderLight,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  minHeight: 48
-                }}
-              >
-                <View>
-                  <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, fontSize: 11, marginBottom: 2 }]}>Start Date</Text>
-                  <Text style={[Typography.labelLarge, { color: startDate ? Colors.textLightPrimary : Colors.textLightMuted, fontWeight: "600" }]}>
-                    {startDate ? startDate.toLocaleDateString() : "Select Date"}
-                  </Text>
-                </View>
-                <Feather name="calendar" size={14} color={startDate ? Colors.primary : Colors.textLightMuted} />
-              </Pressable>
-
-              <Pressable
-                onPress={() => setShowEndPicker(true)}
-                style={{ 
-                  flex: 1, 
-                  backgroundColor: Colors.baseLight, 
-                  borderRadius: 12, 
-                  padding: Spacing.md, 
-                  borderWidth: 1, 
-                  borderColor: endDate ? Colors.primary : Colors.borderLight,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  minHeight: 48
-                }}
-              >
-                <View>
-                  <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, fontSize: 11, marginBottom: 2 }]}>End Date</Text>
-                  <Text style={[Typography.labelLarge, { color: endDate ? Colors.textLightPrimary : Colors.textLightMuted, fontWeight: "600" }]}>
-                    {endDate ? endDate.toLocaleDateString() : "Select Date"}
-                  </Text>
-                </View>
-                <Feather name="calendar" size={14} color={endDate ? Colors.primary : Colors.textLightMuted} />
-              </Pressable>
+              <DateField
+                label="Start Date"
+                value={startDate}
+                onChange={setStartDate}
+                maximumDate={endDate || new Date()}
+              />
+              <DateField
+                label="End Date"
+                value={endDate}
+                onChange={setEndDate}
+                minimumDate={startDate || undefined}
+                maximumDate={new Date()}
+              />
             </View>
 
             {startDate || endDate ? (
@@ -254,84 +218,6 @@ export default function ActivityScreen() {
                 Showing transactions from {startDate ? startDate.toLocaleDateString() : "earliest"} to {endDate ? endDate.toLocaleDateString() : "today"}
               </Text>
             ) : null}
-
-            {showStartPicker && (
-              Platform.OS === "ios" ? (
-                <Modal transparent={true} animationType="fade" visible={showStartPicker}>
-                  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
-                    <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.lg, width: "90%", alignItems: "center" }}>
-                      <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, marginBottom: Spacing.md, fontWeight: "700" }]}>Select Start Date</Text>
-                      <DateTimePicker
-                        value={startDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        maximumDate={endDate || new Date()}
-                        onChange={(event, selectedDate) => {
-                          if (selectedDate) setStartDate(selectedDate);
-                        }}
-                      />
-                      <TouchableOpacity
-                        onPress={() => setShowStartPicker(false)}
-                        style={{ backgroundColor: "#111111", paddingVertical: 12, paddingHorizontal: Spacing.xl, borderRadius: 99, marginTop: Spacing.md, width: "100%", alignItems: "center" }}
-                      >
-                        <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                  value={startDate || new Date()}
-                  mode="date"
-                  display="default"
-                  maximumDate={endDate || new Date()}
-                  onChange={(event, selectedDate) => {
-                    setShowStartPicker(false);
-                    if (selectedDate) setStartDate(selectedDate);
-                  }}
-                />
-              )
-            )}
-
-            {showEndPicker && (
-              Platform.OS === "ios" ? (
-                <Modal transparent={true} animationType="fade" visible={showEndPicker}>
-                  <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)" }}>
-                    <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.lg, width: "90%", alignItems: "center" }}>
-                      <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, marginBottom: Spacing.md, fontWeight: "700" }]}>Select End Date</Text>
-                      <DateTimePicker
-                        value={endDate || new Date()}
-                        mode="date"
-                        display="inline"
-                        minimumDate={startDate || undefined}
-                        maximumDate={new Date()}
-                        onChange={(event, selectedDate) => {
-                          if (selectedDate) setEndDate(selectedDate);
-                        }}
-                      />
-                      <TouchableOpacity
-                        onPress={() => setShowEndPicker(false)}
-                        style={{ backgroundColor: "#111111", paddingVertical: 12, paddingHorizontal: Spacing.xl, borderRadius: 99, marginTop: Spacing.md, width: "100%", alignItems: "center" }}
-                      >
-                        <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Done</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Modal>
-              ) : (
-                <DateTimePicker
-                  value={endDate || new Date()}
-                  mode="date"
-                  display="default"
-                  minimumDate={startDate || undefined}
-                  maximumDate={new Date()}
-                  onChange={(event, selectedDate) => {
-                    setShowEndPicker(false);
-                    if (selectedDate) setEndDate(selectedDate);
-                  }}
-                />
-              )
-            )}
           </Animated.View>
         )}
 
