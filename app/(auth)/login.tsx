@@ -32,6 +32,10 @@ import {
 import { verifyPin, setupPin } from "../../src/services/api/pin";
 import { getUserProfile } from "../../src/services/firebase/firestore";
 import { apiClient } from "../../src/services/api/client";
+import {
+  GoogleSignInButton,
+  OrDivider,
+} from "../../src/components/GoogleSignInButton";
 
 const { width } = Dimensions.get("window");
 
@@ -544,7 +548,10 @@ export default function LoginScreen() {
                       </>
                     )}
                   </TouchableOpacity>
-                  
+
+                  <OrDivider />
+                  <GoogleSignInButton label="Sign in with Google" />
+
                   <Pressable
                     onPress={() => router.push("/(auth)/signup")}
                     style={{ alignSelf: "center", marginTop: Spacing.xl, padding: Spacing.sm }}

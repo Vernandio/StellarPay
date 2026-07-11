@@ -56,22 +56,33 @@ export const signInWithGoogleToken = async (idToken: string) => {
 
 /**
  * Creates a Firestore profile for a Google-authenticated user.
- * Called during signup after the user has entered their username.
+ * Called from the Google onboarding screen after the user picks a username,
+ * confirms their name, enters a phone number, and sets a PIN.
+ *
+ * `displayName`/`email` are pre-filled from the Google account (user.displayName,
+ * user.email) but Google never returns a phone number, so `phone` is whatever
+ * the user typed during onboarding (E.164) alongside its dial `countryCode`.
  */
 export const createGoogleUserProfile = async (
   user: User,
   username: string,
-  phone: string | null
+  displayName: string,
+  phone: string | null,
+  countryCode: string | null = null
 ) => {
   await setDoc(doc(db, "users", user.uid), {
     uid: user.uid,
     email: user.email,
     username: username.toLowerCase(),
-    displayName: user.displayName || username,
-    phone,
+    displayName: displayName.trim() || user.displayName || username,
+    phone: phone || user.phoneNumber,
+    countryCode,
     stellarPublicKey: null,
+    photoURL: user.photoURL || null,
     authProviders: user.providerData.map((p) => p.providerId),
-    hasPin: false,
+    // Google users set a 6-digit PIN during onboarding, so the launch-time
+    // PIN gate in app/index.tsx behaves the same as for email accounts.
+    hasPin: true,
     createdAt: serverTimestamp(),
   });
 };

@@ -48,6 +48,10 @@ import {
   updateUserProfile,
   createWalletCache,
 } from "../../src/services/firebase/firestore";
+import {
+  GoogleSignInButton,
+  OrDivider,
+} from "../../src/components/GoogleSignInButton";
 
 export default function SignUpScreen() {
   const [step, setStep] = useState(1);
@@ -794,6 +798,9 @@ export default function SignUpScreen() {
                       </Text>
                     )}
                   </TouchableOpacity>
+
+                  <OrDivider />
+                  <GoogleSignInButton label="Sign up with Google" />
 
                   <Pressable
                     onPress={() => router.push("/(auth)/login")}

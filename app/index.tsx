@@ -24,8 +24,9 @@ export default function Index() {
         return <Redirect href={{ pathname: "/(auth)/login", params: { step: "forgot_send" } }} />;
       }
     } else {
-      // Authenticated via social but username profile is not created yet
-      return <Redirect href="/(auth)/signup" />;
+      // Authenticated via Google but the username/phone/PIN profile is not
+      // created yet (e.g. app closed mid-onboarding) → resume onboarding.
+      return <Redirect href="/(auth)/google-onboarding" />;
     }
   }
 

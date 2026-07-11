@@ -8,6 +8,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Spacing } from "../../src/constants/spacing";
 import { getContentWidth } from "../../src/constants/layout";
+import { GoogleSignInButton } from "../../src/components/GoogleSignInButton";
 
 const { height } = Dimensions.get("window");
 // Use the clamped content width (not the raw window width) so each carousel

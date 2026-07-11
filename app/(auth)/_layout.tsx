@@ -13,6 +13,7 @@ export default function AuthLayout() {
       <Stack.Screen name="landing" />
       <Stack.Screen name="login" />
       <Stack.Screen name="signup" />
+      <Stack.Screen name="google-onboarding" />
       <Stack.Screen name="verify-phone" />
       <Stack.Screen name="pin-entry" />
     </Stack>
