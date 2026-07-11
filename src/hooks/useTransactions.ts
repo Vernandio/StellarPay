@@ -25,6 +25,26 @@ export interface Activity {
   date: string;
 }
 
+/** Derive the "10:42 AM" time label and the "Today"/"Yesterday"/date section for a Date. */
+const getDateParts = (dateObj: Date) => {
+  const time = dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+
+  let dateSection = "Older";
+  if (dateObj.toDateString() === today.toDateString()) {
+    dateSection = "Today";
+  } else if (dateObj.toDateString() === yesterday.toDateString()) {
+    dateSection = "Yesterday";
+  } else {
+    dateSection = dateObj.toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  return { time, dateSection };
+};
+
 export const useTransactions = () => {
   const { publicKey } = useWalletStore();
   const { user } = useAuthStore();
@@ -110,20 +130,7 @@ export const useTransactions = () => {
           }
 
           const dateObj = new Date(record.created_at);
-          const time = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-          
-          const today = new Date();
-          const yesterday = new Date(today);
-          yesterday.setDate(yesterday.getDate() - 1);
-          
-          let dateSection = "Older";
-          if (dateObj.toDateString() === today.toDateString()) {
-            dateSection = "Today";
-          } else if (dateObj.toDateString() === yesterday.toDateString()) {
-            dateSection = "Yesterday";
-          } else {
-            dateSection = dateObj.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-          }
+          const { time, dateSection } = getDateParts(dateObj);
 
           const amountVal = isCreateAccount ? record.starting_balance : record.amount;
           const amountFormatted = parseFloat(amountVal).toFixed(2);
@@ -202,7 +209,59 @@ export const useTransactions = () => {
           };
         });
 
-      setActivities(parsed);
+      // 4. Merge in incoming Firestore transfers that have no matching on-chain
+      //    payment. Anchor deposits ("Add Money") land here: the feed above is
+      //    built purely from Horizon history, so a completed deposit whose funds
+      //    the sandbox anchor never settled on-chain would otherwise be invisible.
+      //    Restricted to incoming (receiver === current user) because outgoing
+      //    transfers (withdrawals, P2P sends) always produce a reliable on-chain
+      //    row; deduped by hash so a deposit that DID settle on-chain isn't doubled.
+      const renderedHashes = new Set(parsed.map((a) => a.hash));
+      const firestoreOnly: Activity[] = firestoreTxs
+        .filter((tx) => tx.hash && !renderedHashes.has(tx.hash) && tx.receiverUid === user?.uid)
+        .map((tx) => {
+          const dateObj = tx.createdAt?.toDate ? tx.createdAt.toDate() : new Date();
+          const { time, dateSection } = getDateParts(dateObj);
+
+          const title = tx.senderDisplayName || `@${tx.senderUsername}`;
+
+          const usdStr = `+ $${parseFloat(tx.amountUSD).toFixed(2)}`;
+          let amountPrimary = usdStr;
+          let amountSecondary: string | undefined;
+          if (tx.displayCurrency && tx.displayCurrency !== "USD") {
+            const noDecimals = tx.displayCurrency === "VND" || tx.displayCurrency === "IDR";
+            const formattedLocal = parseFloat(String(tx.displayAmount).replace(/,/g, "")).toLocaleString(undefined, {
+              minimumFractionDigits: noDecimals ? 0 : 2,
+              maximumFractionDigits: noDecimals ? 0 : 2,
+            });
+            amountPrimary = `+ ${tx.displayCurrency} ${formattedLocal}`;
+            amountSecondary = usdStr;
+          }
+
+          return {
+            id: tx.hash,
+            type: "received",
+            title,
+            time,
+            amountPrimary,
+            amountSecondary,
+            icon: "arrow-down-left",
+            isPositive: true,
+            dateSection,
+            extra: tx.hash.substring(0, 8),
+            hash: tx.hash,
+            memo: tx.memo || "",
+            destinationAddress: undefined,
+            date: dateObj.toISOString(),
+          };
+        });
+
+      // Merge on-chain + Firestore-only rows, newest first.
+      const merged = [...parsed, ...firestoreOnly].sort(
+        (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+
+      setActivities(merged);
     } catch (err) {
       console.error("Failed to fetch transactions:", err);
     } finally {
