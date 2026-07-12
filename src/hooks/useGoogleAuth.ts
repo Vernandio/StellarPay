@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
+import * as AuthSession from "expo-auth-session";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
 import {
@@ -30,9 +31,16 @@ export const useGoogleAuth = () => {
 
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
     androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
   });
+
+  useEffect(() => {
+    if (request?.redirectUri) {
+      console.log("StellarPay Google Auth Redirect URI:", request.redirectUri);
+    }
+  }, [request]);
 
   useEffect(() => {
     if (!response) return;

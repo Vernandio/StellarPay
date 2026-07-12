@@ -294,13 +294,18 @@ export default function WalletScreen() {
     ]);
   };
 
-  if (isProcessing || (profile && !profile.stellarPublicKey)) {
+  const isSettingUp = !profile?.stellarPublicKey;
+  if (isProcessing || isProcessingPayment || (profile && !profile.stellarPublicKey)) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: Colors.base }} edges={["top", "bottom"]}>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: Spacing.xl }}>
           <ActivityIndicator size="large" color={Colors.primary} style={{ marginBottom: Spacing.lg }} />
-          <Text style={[Typography.headingLarge, { color: Colors.textPrimary, textAlign: "center", marginBottom: Spacing.sm }]}>Setting up your account...</Text>
-          <Text style={[Typography.bodyLarge, { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: Spacing.md }]}>Getting your wallet ready. This only takes a moment.</Text>
+          <Text style={[Typography.headingLarge, { color: Colors.textPrimary, textAlign: "center", marginBottom: Spacing.sm }]}>
+            {isSettingUp ? "Setting up your account..." : "Processing Payment..."}
+          </Text>
+          <Text style={[Typography.bodyLarge, { color: Colors.textSecondary, textAlign: "center", paddingHorizontal: Spacing.md }]}>
+            {isSettingUp ? "Getting your wallet ready. This only takes a moment." : "Submitting transaction to the Stellar network."}
+          </Text>
           {stellarError && <Text style={[Typography.bodySmall, { color: Colors.danger, marginTop: Spacing.md, textAlign: "center" }]}>{stellarError}</Text>}
         </View>
       </SafeAreaView>

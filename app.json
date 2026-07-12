@@ -9,21 +9,16 @@
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": false,
+      "bundleIdentifier": "com.anonymous.stellarpay",
       "infoPlist": {
         "NSCameraUsageDescription": "StellarPay uses your camera to scan QR codes for payments.",
         "NSFaceIDUsageDescription": "StellarPay uses Face ID to protect your wallet.",
-        "NFCReaderUsageDescription": "StellarPay needs NFC to tap and pay with other users."
+        "NFCReaderUsageDescription": "StellarPay needs NFC to tap and pay with other users.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "permissions": [
-        "CAMERA",
-        "USE_BIOMETRIC",
-        "USE_FINGERPRINT",
-        "NFC",
-        "android.permission.NFC",
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "CAMERA",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT",
@@ -68,6 +63,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "f045add3-6f32-44a3-8f22-dec79142f639"
+      }
     }
   }
 }
