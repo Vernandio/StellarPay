@@ -18,10 +18,7 @@ if (hostUri) {
   }
 }
 
-const DEV_API_URL = process.env.EXPO_PUBLIC_API_URL || `http://${localIp}:5000`;
-const PROD_API_URL = "https://api.stellarpay.com";
-
-export const API_BASE = __DEV__ ? DEV_API_URL : PROD_API_URL;
+export const API_BASE = process.env.EXPO_PUBLIC_API_URL || `http://${localIp}:5000`;
 
 const getAuthHeaders = async (): Promise<Record<string, string>> => {
   const token = await auth.currentUser?.getIdToken();
@@ -79,4 +76,3 @@ export const apiClient = {
     }
   },
 };
-export { DEV_API_URL };
