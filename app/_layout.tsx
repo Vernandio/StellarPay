@@ -28,10 +28,6 @@ export default function RootLayout() {
     }
   }, [error]);
 
-  if (!loaded) {
-    return null;
-  }
-
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
