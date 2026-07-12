@@ -6,13 +6,31 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
+import { useFonts } from "expo-font";
+import { Feather, FontAwesome5, AntDesign } from "@expo/vector-icons";
 import { useNotificationListener } from "../src/hooks/useNotificationListener";
 import { AppFrame } from "../src/components/AppFrame";
 import "../global.css";
 
 export default function RootLayout() {
+  const [loaded, error] = useFonts({
+    ...Feather.font,
+    ...FontAwesome5.font,
+    ...AntDesign.font,
+  });
+
   // Listen to Firestore notifications and display local OS alerts
   useNotificationListener();
+
+  useEffect(() => {
+    if (error) {
+      console.error("Failed to load fonts:", error);
+    }
+  }, [error]);
+
+  if (!loaded) {
+    return null;
+  }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
