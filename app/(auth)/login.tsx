@@ -22,6 +22,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
+import { webFormColumn } from "../../src/constants/layout";
 import { signInWithCustomToken } from "@firebase/auth";
 import { auth } from "../../src/services/firebase/config";
 import {
@@ -463,7 +464,7 @@ export default function LoginScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
               contentContainerStyle={{ flexGrow: 1, paddingBottom: Spacing.xl }}
-              style={{ flex: 1 }}
+              style={[{ flex: 1 }, webFormColumn]}
             >
               {/* ── STEP: identifier ── */}
               {step === "identifier" && (

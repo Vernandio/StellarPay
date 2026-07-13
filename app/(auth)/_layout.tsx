@@ -1,5 +1,9 @@
 import { Stack } from "expo-router";
 
+// Auth screens render full-bleed on every platform: their hero backgrounds
+// (globe images, dark gradients) and white bottom sheets span the whole
+// browser width for a smooth, seamless page. Only the form content inside
+// each screen is clamped on web (see `webFormColumn` in src/constants/layout.ts).
 export default function AuthLayout() {
   return (
     <Stack

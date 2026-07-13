@@ -195,7 +195,9 @@ export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
     displayName: string | undefined,
     at: number
   ) => {
-    if (!username || counterpartyUid === uid) return; // skip open requests + self
+    // Skip open requests, self, and the synthetic "anchor" counterparty used
+    // for Add Money / Withdraw transfers — it's not a real person to pay.
+    if (!username || counterpartyUid === uid || counterpartyUid === "anchor") return;
     const key = username.toLowerCase();
     const name = displayName?.trim() || username;
     const existing = byUsername.get(key);

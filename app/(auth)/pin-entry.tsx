@@ -23,6 +23,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
+import { webFormColumn } from "../../src/constants/layout";
 import { verifyPin } from "../../src/services/api/pin";
 import { signOut } from "../../src/services/firebase/auth";
 import { auth, db } from "../../src/services/firebase/config";
@@ -336,7 +337,7 @@ export default function PinEntryScreen() {
               </Animated.View>
             )}
 
-            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={{ flexGrow: 1 }}>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} style={webFormColumn} contentContainerStyle={{ flexGrow: 1 }}>
               <PinRow
                 value={pin}
                 onChangeText={setPin}

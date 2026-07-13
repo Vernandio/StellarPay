@@ -16,7 +16,7 @@ import Animated, {
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
-import { getContentWidth } from "../src/constants/layout";
+import { getContentWidth, MOBILE_REFERENCE_WIDTH } from "../src/constants/layout";
 import { useAuthStore } from "../src/store/authStore";
 import { getUserProfile } from "../src/services/firebase/firestore";
 
@@ -69,8 +69,9 @@ if (hasHce) {
 
 // ── Constants ─────────────────────────────────────────────────────────
 
-// Clamp to the app's content column so the pulse rings don't overflow on web.
-const CIRCLE_SIZE = getContentWidth() * 0.6;
+// Sized off the phone-reference width (not the wider web app shell) so the
+// pulse rings stay a sensible size instead of ballooning on desktop.
+const CIRCLE_SIZE = Math.min(getContentWidth(), MOBILE_REFERENCE_WIDTH) * 0.6;
 
 // Namespaces the NDEF text payload so the scanner can reject random NFC
 // tags (transit cards, stickers) that also carry text records. Only the

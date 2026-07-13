@@ -30,6 +30,7 @@ import { Feather } from "@expo/vector-icons";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
+import { webFormColumn } from "../../src/constants/layout";
 import { auth } from "../../src/services/firebase/config";
 import { signOut, createGoogleUserProfile } from "../../src/services/firebase/auth";
 import { checkAvailability } from "../../src/services/api/auth";
@@ -397,7 +398,7 @@ export default function GoogleOnboardingScreen() {
             )}
 
             <ScrollView
-              style={{ flex: 1 }}
+              style={[{ flex: 1 }, webFormColumn]}
               contentContainerStyle={{ flexGrow: 1, paddingBottom: Spacing.xl }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -722,13 +723,16 @@ export default function GoogleOnboardingScreen() {
           }}
         >
           <View
-            style={{
-              backgroundColor: Colors.surfaceLight,
-              borderTopLeftRadius: 24,
-              borderTopRightRadius: 24,
-              padding: Spacing.lg,
-              maxHeight: Dimensions.get("window").height * 0.7,
-            }}
+            style={[
+              {
+                backgroundColor: Colors.surfaceLight,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                padding: Spacing.lg,
+                maxHeight: Dimensions.get("window").height * 0.7,
+              },
+              webFormColumn,
+            ]}
           >
             <View
               style={{

@@ -9,6 +9,7 @@ import { RecaptchaModal } from "../../src/components/RecaptchaModal";
 import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
+import { webFormColumn } from "../../src/constants/layout";
 import { verifyEmailOtpForLinking, sendEmailVerificationCode } from "../../src/services/firebase/auth";
 import { updateUserProfile } from "../../src/services/firebase/firestore";
 import { auth, firebaseConfig } from "../../src/services/firebase/config";
@@ -213,9 +214,9 @@ export default function VerifyPhoneScreen() {
               </Animated.View>
             )}
 
-            <ScrollView 
-              style={{ flex: 1 }} 
-              contentContainerStyle={{ flexGrow: 1, paddingBottom: Spacing.xl }} 
+            <ScrollView
+              style={[{ flex: 1 }, webFormColumn]}
+              contentContainerStyle={{ flexGrow: 1, paddingBottom: Spacing.xl }}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
@@ -367,7 +368,7 @@ export default function VerifyPhoneScreen() {
       {/* Country Code Picker Modal */}
       <Modal visible={showCountryPicker} transparent animationType="slide" onRequestClose={() => setShowCountryPicker(false)}>
         <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.5)" }}>
-          <View style={{ backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, maxHeight: Dimensions.get("window").height * 0.7 }}>
+          <View style={[{ backgroundColor: Colors.white, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: Spacing.lg, maxHeight: Dimensions.get("window").height * 0.7 }, webFormColumn]}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
               <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary }]}>Select Country</Text>
               <Pressable onPress={() => setShowCountryPicker(false)} style={{ padding: Spacing.xs }}>

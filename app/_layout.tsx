@@ -1,6 +1,7 @@
 
 
 import { useEffect } from "react";
+import { Platform } from "react-native";
 import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -8,9 +9,48 @@ import { StatusBar } from "expo-status-bar";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { useFonts } from "expo-font";
 import { Feather, FontAwesome5, AntDesign } from "@expo/vector-icons";
+import * as SplashScreen from "expo-splash-screen";
 import { useNotificationListener } from "../src/hooks/useNotificationListener";
-import { AppFrame } from "../src/components/AppFrame";
+import { WebContainer } from "../src/components/WebContainer";
+import { Colors } from "../src/constants/colors";
 import "../global.css";
+
+const isWeb = Platform.OS === "web";
+
+// Routes that manage their own full-width web layout and must NOT be clamped
+// into a centered content column: the tab group (has its own sidebar shell),
+// the auth group (renders full-bleed heroes), and full-bleed / overlay modals.
+const WEB_FULL_WIDTH_ROUTES = new Set([
+  "(tabs)",
+  "(auth)",
+  "modals/qr-scan",
+  "modals/share-link",
+]);
+
+// Screens whose root background differs from the default light theme — the
+// clamped column's margins must match it exactly so the page reads as one
+// smooth, continuous background (no letterbox seams).
+const WEB_ROUTE_BACKGROUNDS: Record<string, string> = {
+  "modals/send-confirm": Colors.base,
+  "modals/receive": Colors.base,
+  "transfer-success": "#F8F9FA",
+};
+
+// On web, center each stand-alone screen (send, request, pay-friends, settings,
+// …) in a comfortable reading column instead of stretching it edge-to-edge.
+const webStackScreenLayout = isWeb
+  ? ({ route, children }: { route: { name: string }; children: React.ReactNode }) =>
+      WEB_FULL_WIDTH_ROUTES.has(route.name) ? (
+        <>{children}</>
+      ) : (
+        <WebContainer background={WEB_ROUTE_BACKGROUNDS[route.name]}>{children}</WebContainer>
+      )
+  : undefined;
+
+// Keep the splash screen up until the icon fonts finish loading — otherwise
+// (especially on web, where the font files load async over the network) icon
+// glyphs briefly render as missing-glyph "tofu" boxes before swapping in.
+SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -28,13 +68,25 @@ export default function RootLayout() {
     }
   }, [error]);
 
+  useEffect(() => {
+    if (loaded || error) {
+      SplashScreen.hideAsync();
+    }
+  }, [loaded, error]);
+
+  if (!loaded && !error) {
+    return null;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <BottomSheetModalProvider>
         <SafeAreaProvider>
           <StatusBar style="light" />
-          <AppFrame>
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0F0E23" } }}>
+          <Stack
+            screenLayout={webStackScreenLayout}
+            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: "#0F0E23" } }}
+          >
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" />
             <Stack.Screen
@@ -76,7 +128,6 @@ export default function RootLayout() {
             <Stack.Screen name="support" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="about" options={{ animation: "slide_from_right" }} />
           </Stack>
-          </AppFrame>
         </SafeAreaProvider>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>
