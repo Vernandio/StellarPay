@@ -30,6 +30,8 @@ import { auth, db } from "../../src/services/firebase/config";
 import { getUserProfile, UserProfile } from "../../src/services/firebase/firestore";
 import { doc, updateDoc, deleteDoc } from "@firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 
 const { width } = Dimensions.get("window");
 
@@ -180,6 +182,7 @@ export default function PinEntryScreen() {
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [biometricsEnabled, setBiometricsEnabled] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -196,6 +199,42 @@ export default function PinEntryScreen() {
       }
     })();
   }, []);
+
+  const handleBiometricAuth = async () => {
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
+
+      const savedPin = await SecureStore.getItemAsync("saved_pin");
+      if (!savedPin) return;
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Sign in to StellarPay",
+        fallbackLabel: "Use PIN",
+      });
+
+      if (result.success) {
+        await verifyCode(savedPin);
+      }
+    } catch (err) {
+      console.warn("Biometric login failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (!profileLoading && profile) {
+      AsyncStorage.getItem("biometrics_enabled").then((val) => {
+        if (val === "true") {
+          setBiometricsEnabled(true);
+          // Wait briefly for UI transitions to settle before showing native prompt
+          setTimeout(() => {
+            handleBiometricAuth();
+          }, 500);
+        }
+      });
+    }
+  }, [profileLoading, profile]);
 
   const verifyCode = async (enteredPin: string) => {
     setIsLoading(true);
@@ -349,6 +388,29 @@ export default function PinEntryScreen() {
                 isLoading={isLoading}
                 autoFocus
               />
+
+              {biometricsEnabled && (
+                <TouchableOpacity
+                  onPress={handleBiometricAuth}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    alignSelf: "center",
+                    backgroundColor: Colors.baseLight,
+                    borderRadius: 16,
+                    paddingVertical: 12,
+                    paddingHorizontal: Spacing.lg,
+                    marginTop: Spacing.lg,
+                    borderWidth: 1,
+                    borderColor: Colors.borderLightStrong,
+                    minHeight: 44,
+                  }}
+                >
+                  <Feather name="cpu" size={18} color={Colors.textLightPrimary} style={{ marginRight: 8 }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>Unlock with Biometrics</Text>
+                </TouchableOpacity>
+              )}
 
               <Pressable
                 onPress={handleLogout}

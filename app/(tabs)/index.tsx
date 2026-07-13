@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert, RefreshControl, Share } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, Image, Dimensions, StyleSheet, TouchableOpacity, Alert, RefreshControl, Share, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -28,16 +28,18 @@ import { createNotification } from "../../src/services/firebase/notifications";
 import { getUserProfile } from "../../src/services/firebase/firestore";
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
+import { useAuthStore } from "../../src/store/authStore";
 
 const { width } = Dimensions.get("window");
 
-export default function WalletScreen() {
-  const { publicKey, usdcBalance, isLoadingBalance, displayCurrencyCode, setDisplayCurrencyCode, refreshBalances } = useWallet();
-  const { user, profile } = useAuth();
+export default function Index() {
+  const { profile } = useAuth();
+  const { user } = useAuthStore();
+  const { publicKey, xlmBalance, usdcBalance, isLoadingBalance, displayCurrencyCode, setDisplayCurrencyCode, refreshBalances } = useWallet();
   const { initializeWallet, send, isProcessing, error: stellarError } = useStellar();
-  const { activities, fetchTransactions } = useTransactions();
+  const { activities, isLoading: isTxLoading, fetchTransactions } = useTransactions();
   const currency = getCurrencyByCode(displayCurrencyCode);
-
+  
   const detailSheetRef = useRef<BottomSheetModal>(null);
   const requestDetailSheetRef = useRef<BottomSheetModal>(null);
   const requestItemsSheetRef = useRef<BottomSheetModal>(null);
@@ -60,6 +62,17 @@ export default function WalletScreen() {
     if (!selectedTx || !viewShotRef.current) return;
     try {
       const uri = await viewShotRef.current.capture();
+      
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = uri;
+        link.download = `receipt-${selectedTx.hash || selectedTx.id}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
+
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share Receipt' });
     } catch (err) {
       console.warn('Share receipt failed:', err);
@@ -212,7 +225,13 @@ export default function WalletScreen() {
       }
 
       // Execute USDC payment on Stellar
-      const txHash = await send(requester.stellarPublicKey, selectedRequest.amountUSD, "USDC", selectedRequest.message);
+      const txHash = await send(
+        requester.stellarPublicKey,
+        selectedRequest.amountUSD,
+        "USDC",
+        selectedRequest.message,
+        selectedRequest.senderUid
+      );
 
       // Update payment request status in Firestore
       await updatePaymentRequest(selectedRequest.id, {

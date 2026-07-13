@@ -86,6 +86,20 @@ export default function SendScreen() {
       return;
     }
 
+    const recipientUid = (params.uid || params.id) as string;
+    const recipientUsername = (params.handle as string)?.replace("@", "") || "";
+    const recipientPublicKey = params.publicKey as string;
+
+    if (
+      (recipientUid && recipientUid === profile?.uid) ||
+      (recipientPublicKey && recipientPublicKey === profile?.stellarPublicKey) ||
+      (recipientUsername && recipientUsername.toLowerCase() === profile?.username?.toLowerCase())
+    ) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Transaction Blocked", "You cannot send money to yourself.");
+      return;
+    }
+
     if (!params.publicKey) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Error", "Recipient has not set up a wallet yet.");

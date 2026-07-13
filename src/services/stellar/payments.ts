@@ -105,7 +105,7 @@ export const sendPayment = async ({
       console.log(`Sender missing ${USDC_ASSET.code} trustline — creating it`);
       await setupUSDCTrustline(senderUid, senderPublicKey);
     }
-    if (!(await checkUSDCTrustlineExists(destinationAddress))) {
+    if (destinationAddress !== USDC_ASSET.issuer && !(await checkUSDCTrustlineExists(destinationAddress))) {
       // Sandbox-only convenience: wallet keys are backed up to Firestore for
       // cross-device testing, so we can establish the recipient's trustline
       // on their behalf too.

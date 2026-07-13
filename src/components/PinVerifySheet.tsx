@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE } from "../services/api/client";
 
 interface PinVerifySheetProps {
-  onSuccess: () => void;
+  onSuccess: (verifiedPin: string) => void;
   onDismiss?: () => void;
 }
 
@@ -98,6 +98,7 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
               if (newCount >= 5) {
                 await AsyncStorage.removeItem("failed_pin_attempts");
                 setError("Incorrect PIN. Account locked.");
+                
                 sheetRef.current?.dismiss();
                 
                 if (auth.currentUser?.uid) {
@@ -148,7 +149,7 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setTimeout(() => {
             sheetRef.current?.dismiss();
-            onSuccess();
+            onSuccess(fullPin);
           }, 600);
         } else {
           setPin("");

@@ -1,14 +1,18 @@
-// Format currency amounts for display
 export const formatAmount = (
   amount: string | number,
   currency = "USD",
-  decimals = 2
+  decimals?: number
 ): string => {
   const num = typeof amount === "string" ? parseFloat(amount) : amount;
-  if (isNaN(num)) return "0.00";
+  if (isNaN(num)) return "0";
+  
+  const targetDecimals = decimals !== undefined 
+    ? decimals 
+    : (currency === "IDR" || currency === "VND" ? 0 : 2);
+
   return new Intl.NumberFormat("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
+    minimumFractionDigits: targetDecimals,
+    maximumFractionDigits: targetDecimals,
   }).format(num);
 };
 

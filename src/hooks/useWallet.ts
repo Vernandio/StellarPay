@@ -3,6 +3,8 @@ import { useWalletStore } from "../store/walletStore";
 import { useAuthStore } from "../store/authStore";
 import { getXLMBalance, getUSDCBalance, streamPayments } from "../services/stellar/client";
 import { getWallet } from "../services/firebase/firestore";
+import { doc, updateDoc } from "@firebase/firestore";
+import { db } from "../services/firebase/config";
 
 export const useWallet = () => {
   const { 
@@ -17,6 +19,27 @@ export const useWallet = () => {
       setPublicKey(profile.stellarPublicKey);
     }
   }, [profile]);
+
+  // Sync display currency preference from DB, default to USD if not set
+  useEffect(() => {
+    if (profile) {
+      setDisplayCurrencyCode(profile.displayCurrencyCode || "USD");
+    }
+  }, [profile?.displayCurrencyCode]);
+
+  // Wrapped setter to update store and persist to Firestore
+  const setDisplayCurrency = useCallback(async (code: string) => {
+    setDisplayCurrencyCode(code);
+    if (user?.uid) {
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          displayCurrencyCode: code,
+        });
+      } catch (err) {
+        console.warn("Failed to save currency preference to Firestore:", err);
+      }
+    }
+  }, [user?.uid]);
 
   // Refresh balances from Horizon
   const refreshBalances = useCallback(async () => {
@@ -66,6 +89,6 @@ export const useWallet = () => {
 
   return { 
     publicKey, xlmBalance, usdcBalance, isLoadingBalance, 
-    displayCurrencyCode, setDisplayCurrencyCode, refreshBalances 
+    displayCurrencyCode, setDisplayCurrencyCode: setDisplayCurrency, refreshBalances 
   };
 };

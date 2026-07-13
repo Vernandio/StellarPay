@@ -1,7 +1,7 @@
 import {
   doc, setDoc, updateDoc, collection, query, where,
   orderBy, limit, onSnapshot, serverTimestamp, Timestamp,
-  getDocs,
+  getDocs, or,
 } from "@firebase/firestore";
 import { db } from "./config";
 
@@ -91,4 +91,26 @@ export const getSentRequests = async (senderUid: string): Promise<PaymentRequest
   );
   const snap = await getDocs(q);
   return snap.docs.map((d) => d.data() as PaymentRequest);
+};
+
+/**
+ * Subscribe to all payment requests involving the user (sent or received).
+ */
+export const subscribeToAllUserRequests = (
+  uid: string,
+  callback: (requests: PaymentRequest[]) => void
+) => {
+  const q = query(
+    collection(db, "requests"),
+    or(
+      where("senderUid", "==", uid),
+      where("receiverUid", "==", uid)
+    ),
+    orderBy("createdAt", "desc"),
+    limit(50)
+  );
+
+  return onSnapshot(q, (snap) => {
+    callback(snap.docs.map((d) => d.data() as PaymentRequest));
+  });
 };

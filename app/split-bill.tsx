@@ -123,6 +123,11 @@ export default function SplitBillScreen() {
   }, [debouncedSearch]);
 
   const handleSelectFriend = (contact: any) => {
+    if (contact.id === profile?.uid || contact.handle?.replace("@", "").toLowerCase() === profile?.username?.toLowerCase()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Invalid Action", "You are already included in the bill split automatically. Please select your friends instead.");
+      return;
+    }
     Haptics.selectionAsync();
     setSelectedFriends((prev) =>
       prev.some((f) => f.id === contact.id)

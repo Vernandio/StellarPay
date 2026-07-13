@@ -78,7 +78,7 @@ export const createGoogleUserProfile = async (
     phone: phone || user.phoneNumber,
     countryCode,
     stellarPublicKey: null,
-    photoURL: user.photoURL || null,
+    avatarUrl: user.photoURL || null,
     authProviders: user.providerData.map((p) => p.providerId),
     // Google users set a 6-digit PIN during onboarding, so the launch-time
     // PIN gate in app/index.tsx behaves the same as for email accounts.

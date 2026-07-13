@@ -95,6 +95,15 @@ export default function QRScreen() {
     const uri = await getMyQRImageUri();
     if (!uri) return;
     try {
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = uri;
+        link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share My QR' });
     } catch (err) {
       console.warn('Share QR failed:', err);
@@ -106,6 +115,15 @@ export default function QRScreen() {
     const uri = await getMyQRImageUri();
     if (!uri) return;
     try {
+      if (Platform.OS === 'web') {
+        const link = document.createElement('a');
+        link.href = uri;
+        link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        return;
+      }
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Please allow photo library access to save QR codes.');
@@ -154,6 +172,13 @@ export default function QRScreen() {
           }
 
           const reqData = docSnap.data();
+
+          if (reqData.senderUid === profile?.uid) {
+            Alert.alert("Invalid Action", "You cannot scan and pay your own request.", [
+              { text: "Scan Again", onPress: () => { scannedRef.current = false; setScanned(false); setIsLookingUp(false); } }
+            ]);
+            return;
+          }
 
           if (reqData.status === "paid") {
             Alert.alert("Request Already Paid", "This payment request has already been completed and cannot be paid again.", [
@@ -214,6 +239,13 @@ export default function QRScreen() {
       const user = await getUserByUsername(parsed.username);
       if (!user) {
         Alert.alert("User Not Found", `@${parsed.username} doesn't have a StellarPay account.`, [
+          { text: "Scan Again", onPress: () => { scannedRef.current = false; setScanned(false); setIsLookingUp(false); } },
+        ]);
+        return;
+      }
+
+      if (user.uid === profile?.uid || parsed.username.toLowerCase() === profile?.username?.toLowerCase()) {
+        Alert.alert("Invalid Action", "You cannot scan your own QR code.", [
           { text: "Scan Again", onPress: () => { scannedRef.current = false; setScanned(false); setIsLookingUp(false); } },
         ]);
         return;
@@ -402,26 +434,17 @@ export default function QRScreen() {
             </Text>
 
             <View style={{ backgroundColor: Colors.white, borderRadius: 16, paddingHorizontal: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
-              {[
-                { icon: "image", title: "Photo Library", sub: "Upload QR from gallery", onPress: handleGalleryPick },
-                { icon: "plus-square", title: "Enter Username", sub: "Send by @username directly", onPress: () => {
-                  // Could open a text input modal to enter username directly
-                  Alert.alert("Coming Soon", "Direct username entry will be available soon.");
-                }},
-              ].map((item, idx) => (
-                <Pressable
-                  key={idx}
-                  onPress={item.onPress}
-                  style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, borderBottomWidth: idx === 0 ? 1 : 0, borderBottomColor: Colors.borderLight, minHeight: 56 }}
-                >
-                  <Feather name={item.icon as any} size={24} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{item.title}</Text>
-                    <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>{item.sub}</Text>
-                  </View>
-                  <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
-                </Pressable>
-              ))}
+              <Pressable
+                onPress={handleGalleryPick}
+                style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.lg, minHeight: 56 }}
+              >
+                <Feather name="image" size={24} color={Colors.textLightPrimary} style={{ marginRight: Spacing.md }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>Photo Library</Text>
+                  <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>Upload QR from gallery</Text>
+                </View>
+                <Feather name="chevron-right" size={20} color={Colors.textLightSecondary} />
+              </Pressable>
             </View>
 
             {/* Scan Again button (shown after scan) */}

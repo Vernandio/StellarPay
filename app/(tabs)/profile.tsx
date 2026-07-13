@@ -1,4 +1,4 @@
-import { View, Text, ScrollView, Pressable, Image, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, Pressable, Image, TouchableOpacity, Alert, ActivityIndicator, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -11,19 +11,69 @@ import { useAuth } from "../../src/hooks/useAuth";
 import { useWallet } from "../../src/hooks/useWallet";
 import { signOut } from "../../src/services/firebase/auth";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
-import { useRef, useCallback, useState } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import * as Clipboard from "expo-clipboard";
 import { CURRENCIES, getCurrencyByCode } from "../../src/constants/currencies";
 import * as ImagePicker from 'expo-image-picker';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../src/services/firebase/config';
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
 
 export default function ProfileScreen() {
   const { profile } = useAuth();
   const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
   const currencySheetRef = useRef<BottomSheetModal>(null);
+  const pinSheetRef = useRef<PinVerifySheetRef>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(profile?.avatarUrl || null);
   const [avatarLoading, setAvatarLoading] = useState(false);
+  const [isBiometricsEnabled, setIsBiometricsEnabled] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("biometrics_enabled").then((val) => {
+      setIsBiometricsEnabled(val === "true");
+    });
+  }, []);
+
+  const handleToggleBiometrics = async () => {
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+    if (!hasHardware || !isEnrolled) {
+      Alert.alert("Biometrics Not Available", "Your device does not support or have biometrics enrolled.");
+      return;
+    }
+
+    if (isBiometricsEnabled) {
+      await SecureStore.deleteItemAsync("saved_pin");
+      await AsyncStorage.removeItem("biometrics_enabled");
+      setIsBiometricsEnabled(false);
+      Alert.alert("Disabled", "Biometric login has been disabled.");
+    } else {
+      pinSheetRef.current?.present();
+    }
+  };
+
+  const handleBiometricsSetupSuccess = async (verifiedPin: string) => {
+    try {
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Confirm Face ID / Fingerprint Setup",
+        fallbackLabel: "Use PIN",
+      });
+
+      if (result.success) {
+        await SecureStore.setItemAsync("saved_pin", verifiedPin);
+        await AsyncStorage.setItem("biometrics_enabled", "true");
+        setIsBiometricsEnabled(true);
+        Alert.alert("Success", "Biometric login enabled successfully!");
+      } else {
+        Alert.alert("Failed", "Biometric authentication failed. Please try again.");
+      }
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to setup biometrics.");
+    }
+  };
 
   const handlePickAvatar = async () => {
     try {
@@ -41,11 +91,17 @@ export default function ProfileScreen() {
 
       // Upload to Cloudinary via unsigned preset
       const formData = new FormData();
-      formData.append('file', {
-        uri: asset.uri,
-        type: asset.mimeType || 'image/jpeg',
-        name: 'avatar.jpg',
-      } as any);
+      if (Platform.OS === 'web') {
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        formData.append('file', blob, 'avatar.jpg');
+      } else {
+        formData.append('file', {
+          uri: asset.uri,
+          type: asset.mimeType || 'image/jpeg',
+          name: 'avatar.jpg',
+        } as any);
+      }
       const uploadPreset = process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET || 'stellarpay_avatars';
       const cloudName = process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME || 'stellarpay';
       
@@ -182,7 +238,7 @@ export default function ProfileScreen() {
             {[
               { icon: "user", title: "Personal Information", value: "", onPress: () => router.push("/personal-information" as any) },
               { icon: "bell", title: "Notifications", value: "", onPress: () => router.push("/notification-settings" as any) },
-              { icon: "link-2", title: "Linked Accounts", value: "", onPress: () => router.push("/linked-accounts" as any) },
+              { icon: "cpu", title: "Biometric Login", value: isBiometricsEnabled ? "Enabled" : "Disabled", onPress: handleToggleBiometrics },
               { icon: "lock", title: "Change PIN", value: "", onPress: () => router.push("/security" as any) },
               { icon: "sliders", title: "Preferences", value: displayCurrencyCode, onPress: () => currencySheetRef.current?.present() },
             ].map((item, idx, arr) => (
@@ -270,6 +326,7 @@ export default function ProfileScreen() {
           ))}
         </BottomSheetView>
       </BottomSheetModal>
+      <PinVerifySheet ref={pinSheetRef} onSuccess={handleBiometricsSetupSuccess} />
     </View>
   );
 }

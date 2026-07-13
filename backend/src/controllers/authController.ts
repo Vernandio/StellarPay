@@ -170,12 +170,8 @@ export const checkAvailability = async (req: Request, res: Response) => {
     }
 
     if (phone) {
-      try {
-        await adminAuth.getUserByPhoneNumber(phone.trim());
-        result.phone = false;
-      } catch (_) {
-        result.phone = true;
-      }
+      const snap = await adminFirestore.collection("users").where("phone", "==", phone.trim()).limit(1).get();
+      result.phone = snap.empty;
     }
 
     if (username) {
@@ -204,12 +200,24 @@ export const resolveUser = async (req: Request, res: Response) => {
       return res.status(200).json({ email: u.email, uid: u.uid });
     } catch (_) {}
 
-    // 2. Try phone (with or without leading +)
-    try {
-      const phone = id.startsWith("+") ? id : `+${id}`;
-      const u = await adminAuth.getUserByPhoneNumber(phone);
-      return res.status(200).json({ email: u.email, uid: u.uid });
-    } catch (_) {}
+    // 2. Try phone in Firestore (handling format variations)
+    const cleanPhone = id.replace(/[\s-()]/g, "");
+    const phoneQueries = [cleanPhone, `+${cleanPhone}`];
+    if (cleanPhone.startsWith("0")) {
+      phoneQueries.push(`+62${cleanPhone.substring(1)}`);
+    } else {
+      phoneQueries.push(`+62${cleanPhone}`);
+    }
+
+    const phoneSnap = await adminFirestore.collection("users")
+      .where("phone", "in", phoneQueries)
+      .limit(1)
+      .get();
+
+    if (!phoneSnap.empty) {
+      const profile = phoneSnap.docs[0].data();
+      return res.status(200).json({ email: profile.email, uid: profile.uid });
+    }
 
     // 3. Try username in Firestore
     const snap = await adminFirestore.collection("users").where("username", "==", id).limit(1).get();

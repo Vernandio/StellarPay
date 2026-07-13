@@ -226,7 +226,6 @@ export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
 
   return [...byUsername.values()]
     .sort((a, b) => b.at - a.at)
-    .slice(0, 10)
     .map((c) => ({
       id: c.uid || c.username,
       name: c.displayName,

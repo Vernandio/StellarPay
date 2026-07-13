@@ -155,6 +155,17 @@ export default function RequestScreen() {
       } else {
         // Look up recipient
         const recipientUsername = (params.handle as string)?.replace("@", "") || "";
+        
+        if (
+          recipientUsername.toLowerCase() === profile?.username?.toLowerCase() ||
+          params.uid === profile?.uid ||
+          params.id === profile?.uid
+        ) {
+          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          Alert.alert("Request Blocked", "You cannot request money from yourself.");
+          return;
+        }
+
         const recipient = await getUserByUsername(recipientUsername);
 
         if (!recipient) {
