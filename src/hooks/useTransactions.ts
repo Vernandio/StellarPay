@@ -78,12 +78,10 @@ export const useTransactions = () => {
       // 3. Identify unique public keys to resolve dynamically from Firestore (for blockchain-only transactions)
       const keysToResolve = new Set<string>();
       records.forEach((record: any) => {
-        if (record.type === "payment" || record.type === "path_payment_strict_send" || record.type === "path_payment_strict_receive" || record.type === "create_account") {
+        if (record.type === "payment" || record.type === "path_payment_strict_send" || record.type === "path_payment_strict_receive") {
           const hasDbRecord = firestoreMap.has(record.transaction_hash);
           if (!hasDbRecord) {
-            const otherKey = record.type === "create_account"
-              ? (record.funder === publicKey ? record.account : record.funder)
-              : (record.from === publicKey ? record.to : record.from);
+            const otherKey = record.from === publicKey ? record.to : record.from;
             if (otherKey && otherKey !== publicKey && otherKey !== USDC_ASSET.issuer) {
               keysToResolve.add(otherKey);
             }
@@ -109,12 +107,14 @@ export const useTransactions = () => {
       }
 
       const parsed: Activity[] = records
-        .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive" || r.type === "create_account")
+        // create_account is the one-time Friendbot funding operation (testnet's
+        // initial 10000 XLM grant) that opens every new account — not a
+        // transaction the user made, so it never belongs in their history.
+        .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive")
         .map((record: any) => {
-          const isCreateAccount = record.type === "create_account";
-          const isSender = isCreateAccount ? record.funder === publicKey : record.from === publicKey;
-          const isReceiver = isCreateAccount ? record.account === publicKey : record.to === publicKey;
-          
+          const isSender = record.from === publicKey;
+          const isReceiver = record.to === publicKey;
+
           let type: ActivityType = "sent";
           let isPositive = false;
           let icon = "arrow-up-right";
@@ -132,8 +132,7 @@ export const useTransactions = () => {
           const dateObj = new Date(record.created_at);
           const { time, dateSection } = getDateParts(dateObj);
 
-          const amountVal = isCreateAccount ? record.starting_balance : record.amount;
-          const amountFormatted = parseFloat(amountVal).toFixed(2);
+          const amountFormatted = parseFloat(record.amount).toFixed(2);
           const prefix = isPositive ? "+" : "-";
 
           // Invisible-web3: everything is shown as money, never as a crypto
@@ -142,9 +141,7 @@ export const useTransactions = () => {
 
           // Check if we have beautiful P2P names from Firestore
           const dbRecord = firestoreMap.get(record.transaction_hash);
-          const otherKey = isSender 
-            ? (isCreateAccount ? record.account : record.to) 
-            : (isCreateAccount ? record.funder : record.from);
+          const otherKey = isSender ? record.to : record.from;
           const resolvedUser = resolvedUsersMap.get(otherKey);
 
           let title = "";

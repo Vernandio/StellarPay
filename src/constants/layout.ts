@@ -1,16 +1,33 @@
-import { Dimensions, Platform } from "react-native";
+import { Dimensions, Platform, ViewStyle } from "react-native";
 
-// On wide web/desktop viewports the app is clamped to a phone-sized column so
-// cards, lists and grids don't stretch across the screen. Native is untouched.
-export const APP_MAX_WIDTH = 448;
+// Width of the left sidebar nav shown in place of the mobile bottom tab bar on web.
+export const WEB_SIDEBAR_WIDTH = 240;
+
+// Max width of the centered reading column inside each tab screen's content
+// area (the space to the right of the sidebar) on web, so text/cards don't
+// stretch edge-to-edge on wide screens. The sidebar and page background still
+// fill the full browser width — only this inner column is capped.
+export const WEB_TAB_CONTENT_MAX_WIDTH = 700;
+
+// Several screens size elements (paging carousels, pulse rings) assuming a
+// phone-width viewport, independent of how wide the browser window itself is.
+export const MOBILE_REFERENCE_WIDTH = 448;
+
+// Max width for form content (inputs, PIN boxes, CTAs) on web. The screen's
+// backgrounds (hero images, gradients, white sheets) bleed the full browser
+// width for a smooth, seamless page; only the interactive column is clamped.
+export const WEB_FORM_MAX_WIDTH = 560;
+
+// Web-only style for that form column: append to a ScrollView/View's style
+// array. Resolves to null on native so layouts there are untouched.
+export const webFormColumn: ViewStyle | null =
+  Platform.OS === "web"
+    ? { width: "100%", maxWidth: WEB_FORM_MAX_WIDTH, alignSelf: "center" }
+    : null;
 
 /**
- * The effective content width the UI should lay out against. On native this is
- * just the window width; on web it's the window width capped at APP_MAX_WIDTH,
- * so `Dimensions.get('window').width`-based sizing (circles, hero images) stays
- * inside the clamped column instead of overflowing.
+ * The actual visible width available to page content. The web app fills the
+ * whole browser window (no phone/device clamp), so this is just the window
+ * width on every platform.
  */
-export const getContentWidth = (): number => {
-  const w = Dimensions.get("window").width;
-  return Platform.OS === "web" ? Math.min(w, APP_MAX_WIDTH) : w;
-};
+export const getContentWidth = (): number => Dimensions.get("window").width;

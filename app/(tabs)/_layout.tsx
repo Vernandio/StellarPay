@@ -1,13 +1,40 @@
 import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { Colors } from "../../src/constants/colors";
 import { View, StyleSheet, Platform } from "react-native";
+import { WebSidebar } from "../../src/components/WebSidebar";
+import { WEB_TAB_CONTENT_MAX_WIDTH } from "../../src/constants/layout";
+
+const isWeb = Platform.OS === "web";
 
 export default function TabsLayout() {
   return (
     <Tabs
+      tabBar={isWeb ? (props) => <WebSidebar {...props} /> : undefined}
+      screenLayout={
+        isWeb
+          ? ({ route, children }) => (
+              <View style={styles.webContentOuter}>
+                {route.name === "index" && (
+                  // Full-width copy of the Home screen's header gradient so the
+                  // dark band bleeds smoothly across the whole content area
+                  // instead of being cut off at the clamped column's edges.
+                  // Must match the gradient in app/(tabs)/index.tsx exactly.
+                  <LinearGradient
+                    colors={["#000000", "#111111", Colors.baseLight]}
+                    locations={[0, 0.6, 1]}
+                    style={styles.webHomeHeaderBleed}
+                  />
+                )}
+                <View style={styles.webContentInner}>{children}</View>
+              </View>
+            )
+          : undefined
+      }
       screenOptions={{
         headerShown: false,
+        tabBarPosition: isWeb ? "left" : "bottom",
         tabBarStyle: {
           position: "absolute",
           bottom: 0,
@@ -95,3 +122,25 @@ export default function TabsLayout() {
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  webContentOuter: {
+    flex: 1,
+    alignItems: "center",
+    // Matches every tab screen's root background so the margins beside the
+    // clamped column read as one continuous page.
+    backgroundColor: Colors.baseLight,
+  },
+  webContentInner: {
+    flex: 1,
+    width: "100%",
+    maxWidth: WEB_TAB_CONTENT_MAX_WIDTH,
+  },
+  webHomeHeaderBleed: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 380,
+  },
+});
