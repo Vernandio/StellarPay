@@ -283,7 +283,7 @@ export default function SendScreen() {
                   keyboardType="decimal-pad"
                   placeholder="0.00"
                   placeholderTextColor={Colors.textLightSecondary}
-                  style={[Typography.displayLarge, { fontSize: 40, lineHeight: 48, color: Colors.textLightPrimary, flex: 1, minWidth: 0, height: 56 }]}
+                  style={[Typography.displayLarge, { fontSize: 40, lineHeight: 52, color: Colors.textLightPrimary, flex: 1, minWidth: 0, height: 64, paddingVertical: 0 }]}
                   selectionColor={Colors.teal}
                 />
                 {/* USD is fixed — no selector */}
@@ -315,7 +315,7 @@ export default function SendScreen() {
                   marginBottom: Spacing.xs,
                 }}
               >
-                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 40, color: Colors.textLightPrimary, flex: 1 }]}>
+                <Text style={[Typography.displayLarge, { fontSize: 32, lineHeight: 42, color: Colors.textLightPrimary, flex: 1 }]}>
                   {receiveCurrency.code === "USD" ? (amount ? parseFloat(amount).toFixed(2) : "0.00") : convertedAmount}
                 </Text>
                 <TouchableOpacity
