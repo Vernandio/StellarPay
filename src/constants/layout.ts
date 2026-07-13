@@ -3,6 +3,11 @@ import { Dimensions, Platform, ViewStyle } from "react-native";
 // Width of the left sidebar nav shown in place of the mobile bottom tab bar on web.
 export const WEB_SIDEBAR_WIDTH = 240;
 
+// Below this window width, web falls back to the same mobile bottom tab bar
+// as native — a resized/narrow browser window (or an actual phone browser)
+// isn't "desktop" just because it's running on web.
+export const WEB_DESKTOP_BREAKPOINT = 900;
+
 // Max width of the centered reading column inside each tab screen's content
 // area (the space to the right of the sidebar) on web, so text/cards don't
 // stretch edge-to-edge on wide screens. The sidebar and page background still

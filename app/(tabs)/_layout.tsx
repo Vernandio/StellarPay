@@ -2,18 +2,22 @@ import { Tabs } from "expo-router";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Colors } from "../../src/constants/colors";
-import { View, StyleSheet, Platform } from "react-native";
+import { View, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { WebSidebar } from "../../src/components/WebSidebar";
-import { WEB_TAB_CONTENT_MAX_WIDTH } from "../../src/constants/layout";
-
-const isWeb = Platform.OS === "web";
+import { WEB_TAB_CONTENT_MAX_WIDTH, WEB_DESKTOP_BREAKPOINT } from "../../src/constants/layout";
 
 export default function TabsLayout() {
+  // Reactive to browser resizes: a narrow web window (or an actual phone
+  // browser) should fall back to the same bottom tab bar as native, not the
+  // desktop sidebar. Sidebar is a viewport-width thing, not a platform thing.
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && width >= WEB_DESKTOP_BREAKPOINT;
+
   return (
     <Tabs
-      tabBar={isWeb ? (props) => <WebSidebar {...props} /> : undefined}
+      tabBar={isDesktopWeb ? (props) => <WebSidebar {...props} /> : undefined}
       screenLayout={
-        isWeb
+        isDesktopWeb
           ? ({ route, children }) => (
               <View style={styles.webContentOuter}>
                 {route.name === "index" && (
@@ -34,7 +38,7 @@ export default function TabsLayout() {
       }
       screenOptions={{
         headerShown: false,
-        tabBarPosition: isWeb ? "left" : "bottom",
+        tabBarPosition: isDesktopWeb ? "left" : "bottom",
         tabBarStyle: {
           position: "absolute",
           bottom: 0,
