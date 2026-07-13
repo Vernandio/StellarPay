@@ -319,7 +319,7 @@ export default function RequestScreen() {
                   keyboardType="decimal-pad"
                   placeholder="0.00"
                   placeholderTextColor={Colors.textLightSecondary}
-                  style={[Typography.displayLarge, { fontSize: 40, lineHeight: 48, color: Colors.textLightPrimary, flex: 1, minWidth: 0, height: 56 }]}
+                  style={[Typography.displayLarge, { fontSize: 40, lineHeight: 52, color: Colors.textLightPrimary, flex: 1, minWidth: 0, height: 64, paddingVertical: 0 }]}
                   selectionColor={Colors.teal}
                 />
                 <TouchableOpacity
