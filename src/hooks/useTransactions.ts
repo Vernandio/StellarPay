@@ -52,7 +52,10 @@ export const useTransactions = () => {
   const [isLoading, setIsLoading] = useState(false);
 
   const fetchTransactions = useCallback(async () => {
-    if (!publicKey) return;
+    if (!publicKey) {
+      setActivities([]);
+      return;
+    }
     setIsLoading(true);
     try {
       // 1. Load blockchain history

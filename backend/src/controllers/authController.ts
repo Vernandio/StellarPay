@@ -200,21 +200,29 @@ export const resolveUser = async (req: Request, res: Response) => {
       return res.status(200).json({ email: u.email, uid: u.uid });
     } catch (_) {}
 
-    // 2. Try phone in Firestore (handling format variations)
+    // 2. Try phone in Firestore (handling format variations across supported country prefixes)
     const cleanPhone = id.replace(/[\s-()]/g, "");
     const phoneQueries = [cleanPhone, `+${cleanPhone}`];
-    if (cleanPhone.startsWith("0")) {
-      phoneQueries.push(`+62${cleanPhone.substring(1)}`);
-    } else {
-      phoneQueries.push(`+62${cleanPhone}`);
-    }
+    const countryCodes = ["+62", "+1", "+44", "+65", "+60", "+63", "+66", "+84", "+91", "+81", "+82", "+61"];
+    const nationalNumber = cleanPhone.startsWith("0") ? cleanPhone.substring(1) : cleanPhone;
+
+    countryCodes.forEach(code => {
+      phoneQueries.push(`${code}${nationalNumber}`);
+      phoneQueries.push(`${code.substring(1)}${nationalNumber}`);
+    });
+    const uniquePhoneQueries = Array.from(new Set(phoneQueries)).filter(Boolean);
 
     const phoneSnap = await adminFirestore.collection("users")
-      .where("phone", "in", phoneQueries)
-      .limit(1)
+      .where("phone", "in", uniquePhoneQueries)
+      .limit(2)
       .get();
 
     if (!phoneSnap.empty) {
+      if (phoneSnap.size > 1) {
+        return res.status(400).json({
+          error: "Multiple accounts match this phone number. Please specify the country code (e.g., +62...)."
+        });
+      }
       const profile = phoneSnap.docs[0].data();
       return res.status(200).json({ email: profile.email, uid: profile.uid });
     }

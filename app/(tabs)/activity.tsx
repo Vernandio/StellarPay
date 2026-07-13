@@ -108,64 +108,6 @@ export default function ActivityScreen() {
     }
   };
 
-  const renderBackdrop = useCallback(
-    (props: any) => (
-      <BottomSheetBackdrop {...props} disappearsOnIndex={-1} appearsOnIndex={0} pressBehavior="close" />
-    ),
-    []
-  );
-
-  const filteredActivities = useMemo(() => {
-    return activities.filter(item => {
-      // Type Filter
-      if (filter === "Sent" && item.type !== "sent") return false;
-      if (filter === "Received" && item.type !== "received") return false;
-
-      // Date Filter
-      if (item.date) {
-        const itemDate = new Date(item.date);
-        if (startDate) {
-          const startOfDay = new Date(startDate);
-          startOfDay.setHours(0, 0, 0, 0);
-          if (itemDate < startOfDay) return false;
-        }
-        if (endDate) {
-          const endOfDay = new Date(endDate);
-          endOfDay.setHours(23, 59, 59, 999);
-          if (itemDate > endOfDay) return false;
-        }
-      }
-
-      // Search Query
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase().trim();
-        // Remove symbols to search nominal amounts (e.g. "$50" or "Rp 400,000" -> "400000")
-        const cleanQuery = query.replace(/[^0-9.]/g, "");
-        
-        const matchesTitle = item.title.toLowerCase().includes(query);
-        const matchesHash = item.hash ? item.hash.toLowerCase().includes(query) : false;
-        const matchesId = item.id.toLowerCase().includes(query);
-        const matchesMemo = item.memo ? item.memo.toLowerCase().includes(query) : false;
-        
-        const cleanAmountPrimary = item.amountPrimary.replace(/[^0-9.]/g, "");
-        const cleanAmountSecondary = item.amountSecondary ? item.amountSecondary.replace(/[^0-9.]/g, "") : "";
-        const matchesAmount = cleanQuery && (cleanAmountPrimary.includes(cleanQuery) || cleanAmountSecondary.includes(cleanQuery));
-        
-        return matchesTitle || matchesHash || matchesId || matchesMemo || matchesAmount;
-      }
-      return true;
-    });
-  }, [activities, filter, searchQuery, startDate, endDate]);
-
-  // Group by dateSection
-  const groupedActivities = filteredActivities.reduce((acc, curr) => {
-    if (!acc[curr.dateSection]) {
-      acc[curr.dateSection] = [];
-    }
-    acc[curr.dateSection].push(curr);
-    return acc;
-  }, {} as Record<string, any[]>);
-
   const handlePayRequest = () => {
     if (!selectedRequest) return;
     pinSheetRef.current?.present();
@@ -505,7 +447,7 @@ export default function ActivityScreen() {
                   ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) 
                   : "Just now";
 
-                let statusColor = Colors.amber;
+                let statusColor: string = Colors.amber;
                 if (item.status === "paid") statusColor = Colors.teal;
                 if (item.status === "declined") statusColor = Colors.danger;
 

@@ -15,6 +15,7 @@ interface WalletState {
   setLoadingBalance: (v: boolean) => void;
   setLoadingTx: (v: boolean) => void;
   setDisplayCurrencyCode: (code: string) => void;
+  reset: () => void;
 }
 
 export const useWalletStore = create<WalletState>((set) => ({
@@ -31,4 +32,13 @@ export const useWalletStore = create<WalletState>((set) => ({
   setLoadingBalance: (isLoadingBalance) => set({ isLoadingBalance }),
   setLoadingTx: (isLoadingTx) => set({ isLoadingTx }),
   setDisplayCurrencyCode: (displayCurrencyCode) => set({ displayCurrencyCode }),
+  reset: () => set({
+    publicKey: null,
+    xlmBalance: "0",
+    usdcBalance: "0",
+    transactions: [],
+    isLoadingBalance: false,
+    isLoadingTx: false,
+    displayCurrencyCode: "USD"
+  }),
 }));

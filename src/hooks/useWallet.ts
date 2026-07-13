@@ -17,13 +17,17 @@ export const useWallet = () => {
   useEffect(() => {
     if (profile?.stellarPublicKey) {
       setPublicKey(profile.stellarPublicKey);
+    } else {
+      setPublicKey(null);
     }
-  }, [profile]);
+  }, [profile?.stellarPublicKey]);
 
   // Sync display currency preference from DB, default to USD if not set
   useEffect(() => {
-    if (profile) {
-      setDisplayCurrencyCode(profile.displayCurrencyCode || "USD");
+    if (profile?.displayCurrencyCode) {
+      setDisplayCurrencyCode(profile.displayCurrencyCode);
+    } else {
+      setDisplayCurrencyCode("USD");
     }
   }, [profile?.displayCurrencyCode]);
 

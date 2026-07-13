@@ -103,6 +103,18 @@ export default function GoogleOnboardingScreen() {
       return;
     }
 
+    const usernameTrimmed = username.trim();
+    if (!/^[a-zA-Z]+$/.test(usernameTrimmed)) {
+      setFieldErrors((f) => ({ ...f, username: "Username must contain only letters" }));
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+    if (usernameTrimmed.length < 3 || usernameTrimmed.length > 15) {
+      setFieldErrors((f) => ({ ...f, username: "Username must be 3 to 15 letters long" }));
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      return;
+    }
+
     setIsLoading(true);
     try {
       // Format phone to E.164 (same rules as the email signup flow).

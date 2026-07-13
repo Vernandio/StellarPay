@@ -19,6 +19,7 @@ export interface UserProfile {
   avatarUrl?: string;
   authProviders?: string[];
   hasPin?: boolean;
+  displayCurrencyCode?: string;
   notificationPrefs?: NotificationPrefs;
   createdAt: Timestamp;
 }

@@ -126,7 +126,10 @@ export default function Index() {
 
   // Subscribe to pending requests
   useEffect(() => {
-    if (!user?.uid) return;
+    if (!user?.uid) {
+      setPendingRequests([]);
+      return;
+    }
     const unsubscribe = subscribeToPendingRequests(user.uid, (reqs) => {
       setPendingRequests(reqs);
     });

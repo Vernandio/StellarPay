@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useAuthStore } from "../store/authStore";
+import { useWalletStore } from "../store/walletStore";
 import { subscribeToAuth } from "../services/firebase/auth";
 import { getUserProfile } from "../services/firebase/firestore";
 
@@ -14,6 +15,7 @@ export const useAuth = () => {
         setProfile(userProfile);
       } else {
         reset();
+        useWalletStore.getState().reset();
       }
       setLoading(false);
     });
