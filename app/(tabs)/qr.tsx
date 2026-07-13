@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { View, Text, ScrollView, Pressable, Alert, Platform } from "react-native";
+import { View, Text, ScrollView, Pressable, Alert, Platform, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router, useNavigation, useLocalSearchParams } from "expo-router";
@@ -12,6 +12,7 @@ import { Colors } from "../../src/constants/colors";
 import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { useAuthStore } from "../../src/store/authStore";
+import { showToast } from "../../src/store/toastStore";
 import { getUserByUsername, getUserProfile } from "../../src/services/firebase/firestore";
 import { isEMVCoQR } from "../../src/utils/emvco";
 import { API_BASE } from "../../src/services/api/client";
@@ -66,6 +67,7 @@ export default function QRScreen() {
   const { profile } = useAuthStore();
   const navigation = useNavigation();
   const myQRViewShotRef = useRef<any>(null);
+  const qrSvgRef = useRef<any>(null);
   const searchParams = useLocalSearchParams();
   const action = searchParams.action; // "request" or "send"
 
@@ -78,6 +80,18 @@ export default function QRScreen() {
     });
     return unsubscribe;
   }, [navigation]);
+
+  const getQRCodeBase64 = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (qrSvgRef.current) {
+        qrSvgRef.current.toDataURL((data: string) => {
+          resolve(data);
+        });
+      } else {
+        resolve("");
+      }
+    });
+  };
 
   const getMyQRImageUri = async (): Promise<string | null> => {
     if (!myQRViewShotRef.current) return null;
@@ -92,18 +106,28 @@ export default function QRScreen() {
 
   const handleShareMyQR = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web') {
+      try {
+        const base64 = await getQRCodeBase64();
+        if (base64) {
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${base64}`;
+          link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast("QR code downloaded successfully!", "success");
+        } else {
+          showToast("Failed to generate QR image.", "error");
+        }
+      } catch (err) {
+        console.warn("Share QR failed:", err);
+      }
+      return;
+    }
     const uri = await getMyQRImageUri();
     if (!uri) return;
     try {
-      if (Platform.OS === 'web') {
-        const link = document.createElement('a');
-        link.href = uri;
-        link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
       await Sharing.shareAsync(uri, { mimeType: 'image/png', dialogTitle: 'Share My QR' });
     } catch (err) {
       console.warn('Share QR failed:', err);
@@ -112,18 +136,28 @@ export default function QRScreen() {
 
   const handleSaveMyQR = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web') {
+      try {
+        const base64 = await getQRCodeBase64();
+        if (base64) {
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${base64}`;
+          link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast("QR code downloaded successfully!", "success");
+        } else {
+          showToast("Failed to generate QR image.", "error");
+        }
+      } catch (err) {
+        console.warn("Save QR failed:", err);
+      }
+      return;
+    }
     const uri = await getMyQRImageUri();
     if (!uri) return;
     try {
-      if (Platform.OS === 'web') {
-        const link = document.createElement('a');
-        link.href = uri;
-        link.download = `stellarpay-qr-${profile?.username || 'user'}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        return;
-      }
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Please allow photo library access to save QR codes.');
@@ -467,10 +501,14 @@ export default function QRScreen() {
           <Animated.View entering={FadeIn} exiting={FadeOut} style={{ alignItems: "center", paddingTop: Spacing.lg }}>
             <ViewShot ref={myQRViewShotRef} options={{ format: 'png', quality: 1 }} style={{ backgroundColor: Colors.white, borderRadius: 32, padding: Spacing.xxl, alignItems: "center", width: "100%", shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.05, shadowRadius: 16, elevation: 4 }}>
               {/* User Avatar */}
-              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: Spacing.lg }}>
-                <Text style={[Typography.headingLarge, { color: Colors.white, fontSize: 24 }]}>
-                  {(profile?.displayName || profile?.username || "U").charAt(0).toUpperCase()}
-                </Text>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center", marginBottom: Spacing.lg, overflow: "hidden" }}>
+                {profile?.avatarUrl ? (
+                  <Image source={{ uri: profile.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                ) : (
+                  <Text style={[Typography.headingLarge, { color: Colors.white, fontSize: 24 }]}>
+                    {(profile?.displayName || profile?.username || "U").charAt(0).toUpperCase()}
+                  </Text>
+                )}
               </View>
               <Text style={[Typography.headingMedium, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: Spacing.xs }]}>
                 @{profile?.username || "username"}
@@ -484,6 +522,7 @@ export default function QRScreen() {
                   size={200}
                   backgroundColor={Colors.white}
                   color={Colors.textLightPrimary}
+                  getRef={(c) => (qrSvgRef.current = c)}
                 />
               </View>
 

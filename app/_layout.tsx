@@ -13,6 +13,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { useNotificationListener } from "../src/hooks/useNotificationListener";
 import { WebContainer } from "../src/components/WebContainer";
 import { Colors } from "../src/constants/colors";
+import { Toast } from "../src/components/Toast";
 import "../global.css";
 
 const isWeb = Platform.OS === "web";
@@ -128,6 +129,7 @@ export default function RootLayout() {
             <Stack.Screen name="support" options={{ animation: "slide_from_right" }} />
             <Stack.Screen name="about" options={{ animation: "slide_from_right" }} />
           </Stack>
+          <Toast />
         </SafeAreaProvider>
       </BottomSheetModalProvider>
     </GestureHandlerRootView>

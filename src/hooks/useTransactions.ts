@@ -5,6 +5,7 @@ import { useAuthStore } from "../store/authStore";
 import { getRecentTransactions, TransactionRecord } from "../services/firebase/transactions";
 import { USDC_ASSET } from "../constants/stellar";
 import { getUserByPublicKey, UserProfile } from "../services/firebase/firestore";
+import { formatAmount } from "../utils/format";
 
 export type ActivityType = "sent" | "received" | "swap";
 
@@ -135,8 +136,8 @@ export const useTransactions = () => {
           const dateObj = new Date(record.created_at);
           const { time, dateSection } = getDateParts(dateObj);
 
-          const amountFormatted = parseFloat(record.amount).toFixed(2);
-          const prefix = isPositive ? "+" : "-";
+          const amountFormatted = formatAmount(record.amount, "USD");
+          const prefix = isPositive ? "+" : "-" ;
 
           // Invisible-web3: everything is shown as money, never as a crypto
           // asset code. USDC is 1:1 USD; amountPrimary is either USD or converted display currency.
@@ -159,13 +160,10 @@ export const useTransactions = () => {
               title = "Exchange";
             }
 
-            const usdStr = `${prefix} $${parseFloat(dbRecord.amountUSD).toFixed(2)}`;
+            const usdStr = `${prefix} $${formatAmount(dbRecord.amountUSD, "USD")}`;
             // Display localized currency conversions if not USD
             if (dbRecord.displayCurrency && dbRecord.displayCurrency !== "USD") {
-              const formattedLocal = parseFloat(String(dbRecord.displayAmount).replace(/,/g, '')).toLocaleString(undefined, {
-                minimumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
-                maximumFractionDigits: dbRecord.displayCurrency === "VND" || dbRecord.displayCurrency === "IDR" ? 0 : 2,
-              });
+              const formattedLocal = formatAmount(dbRecord.displayAmount, dbRecord.displayCurrency);
               amountPrimary = `${prefix} ${dbRecord.displayCurrency} ${formattedLocal}`;
               amountSecondary = usdStr;
             } else {

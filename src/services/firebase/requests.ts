@@ -1,7 +1,7 @@
 import {
   doc, setDoc, updateDoc, collection, query, where,
   orderBy, limit, onSnapshot, serverTimestamp, Timestamp,
-  getDocs, or,
+  getDocs, or, and,
 } from "@firebase/firestore";
 import { db } from "./config";
 
@@ -63,13 +63,18 @@ export const updatePaymentRequest = async (
  * Subscribe to pending requests where the current user needs to pay.
  */
 export const subscribeToPendingRequests = (
-  receiverUid: string,
+  uid: string,
   callback: (requests: PaymentRequest[]) => void
 ) => {
   const q = query(
     collection(db, "requests"),
-    where("receiverUid", "==", receiverUid),
-    where("status", "==", "pending"),
+    and(
+      where("status", "==", "pending"),
+      or(
+        where("receiverUid", "==", uid),
+        where("senderUid", "==", uid)
+      )
+    ),
     orderBy("createdAt", "desc"),
     limit(20)
   );

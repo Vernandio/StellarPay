@@ -9,6 +9,7 @@ import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { useAuth } from "../../src/hooks/useAuth";
 import { useWallet } from "../../src/hooks/useWallet";
+import { useAuthStore } from "../../src/store/authStore";
 import { signOut } from "../../src/services/firebase/auth";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { useRef, useCallback, useState, useEffect } from "react";
@@ -24,6 +25,7 @@ import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerif
 
 export default function ProfileScreen() {
   const { profile } = useAuth();
+  const { setProfile } = useAuthStore();
   const { publicKey, displayCurrencyCode, setDisplayCurrencyCode } = useWallet();
   const currencySheetRef = useRef<BottomSheetModal>(null);
   const pinSheetRef = useRef<PinVerifySheetRef>(null);
@@ -120,6 +122,10 @@ export default function ProfileScreen() {
       // Update Firestore profile
       if (profile?.uid) {
         await updateDoc(doc(db, 'users', profile.uid), {
+          avatarUrl: uploadData.secure_url,
+        });
+        setProfile({
+          ...profile,
           avatarUrl: uploadData.secure_url,
         });
       }

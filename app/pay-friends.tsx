@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, ActivityIndicator, Image } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -186,8 +186,14 @@ export default function PayFriendsScreen() {
               </View>
             ) : searchResult ? (
               <TouchableOpacity onPress={() => handleSelectFriend(searchResult)} style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm }}>
-                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#4ECDC4", justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                  <Text style={[Typography.headingMedium, { color: Colors.white }]}>{searchResult.displayName.substring(0, 1).toUpperCase()}</Text>
+                <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: "#4ECDC4", justifyContent: "center", alignItems: "center", marginRight: Spacing.md, overflow: "hidden" }}>
+                  {searchResult.avatarUrl ? (
+                    <Image source={{ uri: searchResult.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                  ) : (
+                    <Text style={[Typography.headingMedium, { color: Colors.white }]}>
+                      {searchResult.displayName.substring(0, 1).toUpperCase()}
+                    </Text>
+                  )}
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{searchResult.displayName}</Text>

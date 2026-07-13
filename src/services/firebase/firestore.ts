@@ -129,6 +129,8 @@ export const searchUser = async (queryStr: string): Promise<UserProfile | null> 
   snap = await getDocs(q);
   if (!snap.empty) return snap.docs[0].data() as UserProfile;
 
+  // Filter out system/synthetic accounts
+  const SYSTEM_ACCOUNTS = ["localmerchant", "anchorwallet", "anchor"];
   return null;
 };
 
@@ -196,9 +198,10 @@ export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
     displayName: string | undefined,
     at: number
   ) => {
-    // Skip open requests, self, and the synthetic "anchor" counterparty used
-    // for Add Money / Withdraw transfers — it's not a real person to pay.
-    if (!username || counterpartyUid === uid || counterpartyUid === "anchor") return;
+    // Skip open requests, self, and system/synthetic accounts used
+    // for Add Money / Withdraw / merchant QR transfers — they're not real people.
+    const SYSTEM_ACCOUNTS = ["anchor", "localmerchant", "anchorwallet"];
+    if (!username || counterpartyUid === uid || SYSTEM_ACCOUNTS.includes(counterpartyUid) || SYSTEM_ACCOUNTS.includes(username.toLowerCase())) return;
     const key = username.toLowerCase();
     const name = displayName?.trim() || username;
     const existing = byUsername.get(key);

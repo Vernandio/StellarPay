@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from "react";
-import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Keyboard, Alert } from "react-native";
+import { View, Text, ScrollView, Pressable, TextInput, TouchableOpacity, Keyboard, Alert, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import Animated, { FadeInDown } from "react-native-reanimated";
@@ -10,6 +10,7 @@ import { Typography } from "../../src/constants/typography";
 import { Spacing } from "../../src/constants/spacing";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView, BottomSheetTextInput } from "@gorhom/bottom-sheet";
 import { useAuthStore } from "../../src/store/authStore";
+import { showToast } from "../../src/store/toastStore";
 import { CURRENCIES, Currency } from "../../src/constants/currencies";
 import QRCode from "react-native-qrcode-svg";
 import { fetchExchangeRates, ExchangeRates } from "../../src/services/exchangeRates";
@@ -87,6 +88,18 @@ export default function PayScreen() {
     }
   };
 
+  const getQRCodeBase64 = (): Promise<string> => {
+    return new Promise((resolve) => {
+      if (qrRef.current) {
+        qrRef.current.toDataURL((data: string) => {
+          resolve(data);
+        });
+      } else {
+        resolve("");
+      }
+    });
+  };
+
   const getQRImageUri = async (): Promise<string | null> => {
     if (!qrViewShotRef.current) return null;
     try {
@@ -99,6 +112,26 @@ export default function PayScreen() {
   };
 
   const handleShareQR = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web') {
+      try {
+        const base64 = await getQRCodeBase64();
+        if (base64) {
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${base64}`;
+          link.download = `stellarpay-request-qr-${requestId}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast("QR code downloaded successfully!", "success");
+        } else {
+          showToast("Failed to generate QR image.", "error");
+        }
+      } catch (err) {
+        console.warn("Share QR failed:", err);
+      }
+      return;
+    }
     const uri = await getQRImageUri();
     if (!uri) return;
     try {
@@ -109,6 +142,26 @@ export default function PayScreen() {
   };
 
   const handleSaveQR = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (Platform.OS === 'web') {
+      try {
+        const base64 = await getQRCodeBase64();
+        if (base64) {
+          const link = document.createElement('a');
+          link.href = `data:image/png;base64,${base64}`;
+          link.download = `stellarpay-request-qr-${requestId}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          showToast("QR code downloaded successfully!", "success");
+        } else {
+          showToast("Failed to generate QR image.", "error");
+        }
+      } catch (err) {
+        console.warn("Save QR failed:", err);
+      }
+      return;
+    }
     const uri = await getQRImageUri();
     if (!uri) return;
     try {

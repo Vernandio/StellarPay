@@ -287,29 +287,48 @@ export default function Index() {
   };
 
   const handleDeclineRequest = async (req: PaymentRequest) => {
-    if (!user) return;
+    if (!user || !profile) return;
 
-    Alert.alert("Decline Request", `Are you sure you want to decline this request for $${parseFloat(req.amountUSD).toFixed(2)} USD from ${req.senderDisplayName}?`, [
-      { text: "Cancel", style: "cancel" },
+    const isSent = req.senderUid === profile.uid;
+    const alertTitle = isSent ? "Cancel Request" : "Decline Request";
+    const alertMsg = isSent 
+      ? `Are you sure you want to cancel this request for $${formatAmount(req.amountUSD, "USD")} USD to @${req.receiverUsername}?`
+      : `Are you sure you want to decline this request for $${formatAmount(req.amountUSD, "USD")} USD from ${req.senderDisplayName}?`;
+
+    const confirmText = isSent ? "Cancel Request" : "Decline";
+
+    Alert.alert(alertTitle, alertMsg, [
+      { text: "No", style: "cancel" },
       {
-        text: "Decline",
+        text: confirmText,
         style: "destructive",
         onPress: async () => {
           try {
             await updatePaymentRequest(req.id, { status: "declined" });
 
-            // Notify the requester
-            await createNotification({
-              uid: req.senderUid,
-              title: "Request Declined",
-              message: `${profile?.displayName || profile?.username} declined your request of $${parseFloat(req.amountUSD).toFixed(2)} USD`,
-              type: "request_declined",
-              referenceId: req.id,
-            });
+            if (!isSent) {
+              // Notify the requester
+              await createNotification({
+                uid: req.senderUid,
+                title: "Request Declined",
+                message: `${profile?.displayName || profile?.username} declined your request of $${formatAmount(req.amountUSD, "USD")} USD`,
+                type: "request_declined",
+                referenceId: req.id,
+              });
+            } else {
+              // Notify the receiver that the request was cancelled
+              await createNotification({
+                uid: req.receiverUid,
+                title: "Request Cancelled",
+                message: `${profile?.displayName || profile?.username} cancelled their request of $${formatAmount(req.amountUSD, "USD")} USD`,
+                type: "request_declined",
+                referenceId: req.id,
+              });
+            }
 
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           } catch (err: any) {
-            Alert.alert("Error", err.message || "Failed to decline request.");
+            Alert.alert("Error", err.message || "Failed to update request.");
           }
         },
       },
@@ -479,12 +498,15 @@ export default function Index() {
                     <Text style={[Typography.labelSmall, { color: Colors.white, fontWeight: "700" }]}>{pendingRequests.length}</Text>
                   </View>
                 </View>
-                <FlashList
+                 <FlashList
                   data={pendingRequests}
                   // @ts-ignore
                   estimatedItemSize={90}
                   renderItem={({ item }) => {
-                    const localAmount = rates ? convertUSDTo(parseFloat(item.amountUSD), currency.code as keyof ExchangeRates, rates) : item.amountUSD;
+                    const isSent = item.senderUid === profile?.uid;
+                    const localAmount = rates 
+                      ? convertUSDTo(parseFloat(item.amountUSD), currency.code as keyof ExchangeRates, rates) 
+                      : formatAmount(item.amountUSD, "USD");
                     return (
                       <View
                         style={{
@@ -500,9 +522,11 @@ export default function Index() {
                           style={{ flex: 1, flexDirection: "row", alignItems: "center" }}
                         >
                           <View style={{ flex: 1 }}>
-                            <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>{item.senderDisplayName}</Text>
+                            <Text style={[Typography.bodyLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
+                              {isSent ? `Request to @${item.receiverUsername}` : item.senderDisplayName}
+                            </Text>
                             <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginTop: 2 }]} numberOfLines={1}>
-                              {item.message || "Requested money"}
+                              {isSent ? (item.message ? `Sent: "${item.message}"` : "Requested money") : (item.message || "Requested money")}
                             </Text>
                           </View>
                           <View style={{ alignItems: "flex-end", marginRight: Spacing.md }}>
@@ -513,28 +537,39 @@ export default function Index() {
                             {item.requestedCurrency && item.requestedCurrency !== currency.code ? (
                               <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
                                 {item.requestedCurrency}{" "}
-                                {parseFloat(item.requestedAmount || "0").toLocaleString(undefined, {
-                                  minimumFractionDigits: item.requestedCurrency === "VND" || item.requestedCurrency === "IDR" ? 0 : 2,
-                                })}
+                                {formatAmount(item.requestedAmount || "0", item.requestedCurrency)}
                               </Text>
                             ) : currency.code !== "USD" ? (
-                              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>${parseFloat(item.amountUSD).toFixed(2)}</Text>
+                              <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary }]}>
+                                ${formatAmount(item.amountUSD, "USD")}
+                              </Text>
                             ) : null}
                           </View>
                         </Pressable>
                         <View style={{ flexDirection: "row", gap: Spacing.xs }}>
-                          <TouchableOpacity
-                            onPress={() => handleDeclineRequest(item)}
-                            style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center" }}
-                          >
-                            <Feather name="x" size={16} color={Colors.danger} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => handlePayRequest(item)}
-                            style={{ width: 56, height: 36, borderRadius: 18, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center" }}
-                          >
-                            <Text style={[Typography.labelSmall, { color: Colors.white, fontWeight: "700" }]}>Pay</Text>
-                          </TouchableOpacity>
+                          {isSent ? (
+                            <TouchableOpacity
+                              onPress={() => handleDeclineRequest(item)}
+                              style={{ paddingHorizontal: Spacing.md, height: 36, borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center" }}
+                            >
+                              <Text style={[Typography.labelSmall, { color: Colors.danger, fontWeight: "700" }]}>Cancel</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => handleDeclineRequest(item)}
+                                style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center" }}
+                              >
+                                <Feather name="x" size={16} color={Colors.danger} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handlePayRequest(item)}
+                                style={{ width: 56, height: 36, borderRadius: 18, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center" }}
+                              >
+                                <Text style={[Typography.labelSmall, { color: Colors.white, fontWeight: "700" }]}>Pay</Text>
+                              </TouchableOpacity>
+                            </>
+                          )}
                         </View>
                       </View>
                     );
@@ -817,10 +852,10 @@ export default function Index() {
               </View>
               
               <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 24, marginBottom: 2 }]}>
-                {selectedRequest.senderDisplayName}
+                {selectedRequest.senderUid === profile?.uid ? `Request to @${selectedRequest.receiverUsername}` : selectedRequest.senderDisplayName}
               </Text>
               <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: 6 }]}>
-                @{selectedRequest.senderUsername}
+                {selectedRequest.senderUid === profile?.uid ? `For @${selectedRequest.receiverUsername}` : `@${selectedRequest.senderUsername}`}
               </Text>
               
               {/* Large display fiat amount */}
@@ -832,7 +867,7 @@ export default function Index() {
 
               {currency.code !== "USD" && !selectedRequest.requestedCurrency && (
                 <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginBottom: Spacing.md }]}>
-                  = ${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD
+                  = ${formatAmount(selectedRequest.amountUSD, "USD")} USD
                 </Text>
               )}
             </View>
@@ -909,27 +944,42 @@ export default function Index() {
 
             {/* Action Buttons Row */}
             <View style={{ flexDirection: "row", gap: Spacing.md }}>
-              <TouchableOpacity
-                onPress={() => {
-                  requestDetailSheetRef.current?.dismiss();
-                  handleDeclineRequest(selectedRequest);
-                }}
-                style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
-              >
-                <Feather name="x" size={16} color={Colors.danger} style={{ marginRight: 8 }} />
-                <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>Decline</Text>
-              </TouchableOpacity>
+              {selectedRequest.senderUid === profile?.uid ? (
+                <TouchableOpacity
+                  onPress={() => {
+                    requestDetailSheetRef.current?.dismiss();
+                    handleDeclineRequest(selectedRequest);
+                  }}
+                  style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
+                >
+                  <Feather name="x" size={16} color={Colors.danger} style={{ marginRight: 8 }} />
+                  <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>Cancel Request</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity
+                    onPress={() => {
+                      requestDetailSheetRef.current?.dismiss();
+                      handleDeclineRequest(selectedRequest);
+                    }}
+                    style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white, flexDirection: "row" }}
+                  >
+                    <Feather name="x" size={16} color={Colors.danger} style={{ marginRight: 8 }} />
+                    <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>Decline</Text>
+                  </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => {
-                  requestDetailSheetRef.current?.dismiss();
-                  handlePayRequest(selectedRequest);
-                }}
-                style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center", flexDirection: "row" }}
-              >
-                <Feather name="check" size={16} color={Colors.white} style={{ marginRight: 8 }} />
-                <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Pay Now</Text>
-              </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      requestDetailSheetRef.current?.dismiss();
+                      handlePayRequest(selectedRequest);
+                    }}
+                    style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center", flexDirection: "row" }}
+                  >
+                    <Feather name="check" size={16} color={Colors.white} style={{ marginRight: 8 }} />
+                    <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>Pay Now</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </BottomSheetView>
         )}

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
-import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable } from "react-native";
+import { View, Text, TouchableOpacity, TextInput, ScrollView, Platform, KeyboardAvoidingView, ActivityIndicator, Alert, Pressable, Image } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
@@ -100,13 +100,14 @@ export default function SplitBillScreen() {
       setSearchLoading(true);
       try {
         const found = await searchUser(debouncedSearch);
-        if (found) {
+        if (found && found.uid !== profile?.uid) {
           setSearchResults([
             {
               id: found.uid,
               name: found.displayName || found.username,
               handle: `@${found.username}`,
               avatar: (found.displayName || found.username).charAt(0).toUpperCase(),
+              avatarUrl: found.avatarUrl || null,
               color: "#7B61FF",
             },
           ]);
@@ -506,8 +507,12 @@ export default function SplitBillScreen() {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                     {selectedFriends.map((friend) => (
                       <View key={friend.id} style={{ flexDirection: "row", alignItems: "center", backgroundColor: Colors.white, borderRadius: 99, paddingLeft: 4, paddingRight: Spacing.sm, height: 36, marginRight: Spacing.sm, borderWidth: 1, borderColor: Colors.borderLight }}>
-                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: friend.color || Colors.primary, justifyContent: "center", alignItems: "center", marginRight: 6 }}>
-                          <Text style={[Typography.bodySmall, { color: Colors.white, fontWeight: "700" }]}>{friend.avatar}</Text>
+                        <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: friend.color || Colors.primary, justifyContent: "center", alignItems: "center", marginRight: 6, overflow: "hidden" }}>
+                          {friend.avatarUrl ? (
+                            <Image source={{ uri: friend.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                          ) : (
+                            <Text style={[Typography.bodySmall, { color: Colors.white, fontWeight: "700" }]}>{friend.avatar}</Text>
+                          )}
                         </View>
                         <Text style={[Typography.bodySmall, { color: Colors.textLightPrimary, fontWeight: "600", marginRight: 4 }]}>{friend.name}</Text>
                         <TouchableOpacity onPress={() => handleSelectFriend(friend)}>
@@ -534,8 +539,12 @@ export default function SplitBillScreen() {
                         onPress={() => handleSelectFriend(contact)}
                         style={{ flexDirection: "row", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, borderBottomWidth: index === (search ? searchResults : suggestedFriends).length - 1 ? 0 : 1, borderBottomColor: Colors.borderLight }}
                       >
-                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: contact.color || Colors.primary, justifyContent: "center", alignItems: "center", marginRight: Spacing.md }}>
-                          <Text style={[Typography.headingMedium, { color: Colors.white, fontSize: 16 }]}>{contact.avatar}</Text>
+                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: contact.color || Colors.primary, justifyContent: "center", alignItems: "center", marginRight: Spacing.md, overflow: "hidden" }}>
+                          {contact.avatarUrl ? (
+                            <Image source={{ uri: contact.avatarUrl }} style={{ width: "100%", height: "100%" }} />
+                          ) : (
+                            <Text style={[Typography.headingMedium, { color: Colors.white, fontSize: 16 }]}>{contact.avatar}</Text>
+                          )}
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700", marginBottom: 2 }]}>{contact.name}</Text>

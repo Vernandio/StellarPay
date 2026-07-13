@@ -180,33 +180,51 @@ export default function ActivityScreen() {
   };
 
   const handleDeclineRequest = async () => {
-    if (!selectedRequest || !user) return;
+    if (!selectedRequest || !user || !profile) return;
+
+    const isSent = selectedRequest.senderUid === profile.uid;
+    const alertTitle = isSent ? "Cancel Request" : "Decline Request";
+    const alertMsg = isSent 
+      ? `Are you sure you want to cancel this request for $${formatAmount(selectedRequest.amountUSD, "USD")} USD to @${selectedRequest.receiverUsername}?`
+      : `Are you sure you want to decline this request for $${formatAmount(selectedRequest.amountUSD, "USD")} USD from ${selectedRequest.senderDisplayName || selectedRequest.senderUsername}?`;
+
+    const confirmText = isSent ? "Cancel Request" : "Decline";
 
     Alert.alert(
-      "Decline Request",
-      `Are you sure you want to decline this request for $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD from ${selectedRequest.senderDisplayName || selectedRequest.senderUsername}?`,
+      alertTitle,
+      alertMsg,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "No", style: "cancel" },
         {
-          text: "Decline",
+          text: confirmText,
           style: "destructive",
           onPress: async () => {
             setIsProcessingRequest(true);
             try {
               await updatePaymentRequest(selectedRequest.id, { status: "declined" });
 
-              await createNotification({
-                uid: selectedRequest.senderUid,
-                title: "Request Declined",
-                message: `${profile?.displayName || profile?.username} declined your request of $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD`,
-                type: "request_declined",
-                referenceId: selectedRequest.id,
-              });
+              if (!isSent) {
+                await createNotification({
+                  uid: selectedRequest.senderUid,
+                  title: "Request Declined",
+                  message: `${profile?.displayName || profile?.username} declined your request of $${formatAmount(selectedRequest.amountUSD, "USD")} USD`,
+                  type: "request_declined",
+                  referenceId: selectedRequest.id,
+                });
+              } else {
+                await createNotification({
+                  uid: selectedRequest.receiverUid,
+                  title: "Request Cancelled",
+                  message: `${profile?.displayName || profile?.username} cancelled their request of $${formatAmount(selectedRequest.amountUSD, "USD")} USD`,
+                  type: "request_declined",
+                  referenceId: selectedRequest.id,
+                });
+              }
 
               await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               requestSheetRef.current?.dismiss();
             } catch (err: any) {
-              Alert.alert("Error", err.message || "Failed to decline request.");
+              Alert.alert("Error", err.message || "Failed to update request.");
             } finally {
               setIsProcessingRequest(false);
               setSelectedRequest(null);
@@ -717,29 +735,39 @@ export default function ActivityScreen() {
               ) : null}
             </View>
 
-            {/* Actions for receiver of pending request */}
-            {selectedRequest.status === "pending" && selectedRequest.receiverUid === profile?.uid ? (
-              <View style={{ flexDirection: "row", gap: Spacing.md }}>
+            {/* Actions for pending request */}
+            {selectedRequest.status === "pending" ? (
+              selectedRequest.receiverUid === profile?.uid ? (
+                <View style={{ flexDirection: "row", gap: Spacing.md }}>
+                  <TouchableOpacity
+                    onPress={handleDeclineRequest}
+                    disabled={isProcessingRequest}
+                    style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
+                  >
+                    <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>DECLINE</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    onPress={handlePayRequest}
+                    disabled={isProcessingRequest}
+                    style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center" }}
+                  >
+                    {isProcessingRequest ? (
+                      <ActivityIndicator color={Colors.white} />
+                    ) : (
+                      <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>PAY NOW</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              ) : (
                 <TouchableOpacity
                   onPress={handleDeclineRequest}
                   disabled={isProcessingRequest}
-                  style={{ flex: 1, height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
+                  style={{ height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
                 >
-                  <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>DECLINE</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>CANCEL REQUEST</Text>
                 </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={handlePayRequest}
-                  disabled={isProcessingRequest}
-                  style={{ flex: 1, height: 52, borderRadius: 26, backgroundColor: Colors.textLightPrimary, justifyContent: "center", alignItems: "center" }}
-                >
-                  {isProcessingRequest ? (
-                    <ActivityIndicator color={Colors.white} />
-                  ) : (
-                    <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>PAY NOW</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
+              )
             ) : (
               <TouchableOpacity
                 onPress={() => requestSheetRef.current?.dismiss()}
