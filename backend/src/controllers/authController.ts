@@ -329,3 +329,105 @@ export const resolveUserToken = async (req: Request, res: Response) => {
     return res.status(500).json({ error: "Internal server error" });
   }
 };
+
+// ── Google OAuth (backend-mediated) ────────────────────────────────────
+// The app can't complete Google OAuth directly: Google's web client rejects
+// exp:// and custom-scheme redirect URIs. Instead the app opens
+// /google/start in a browser; Google redirects back HERE (an https URL it
+// accepts), and we hand the app a Firebase custom token via its deep link.
+//
+// Setup: add  https://<this-host>/api/auth/google/callback  to the web
+// client's "Authorized redirect URIs" in Google Cloud Console.
+
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.GOOGLE_CLIENT_ID ||
+  "317642487712-qi2t79r72q6dpfkcp1g7bv79hkk506u8.apps.googleusercontent.com";
+
+// Deep links we're willing to bounce the token back to
+const ALLOWED_REDIRECT_PREFIXES = [
+  "stellarpay://",
+  "exp://",       // Expo Go
+  "exps://",
+  "http://localhost",
+  "https://",
+];
+
+const isAllowedRedirect = (url: string) =>
+  ALLOWED_REDIRECT_PREFIXES.some((p) => url.startsWith(p));
+
+const appendParam = (url: string, key: string, value: string) =>
+  `${url}${url.includes("?") ? "&" : "?"}${key}=${encodeURIComponent(value)}`;
+
+export const googleStart = (req: Request, res: Response) => {
+  const redirect = String(req.query.redirect || "");
+  if (!redirect || !isAllowedRedirect(redirect)) {
+    return res.status(400).json({ error: "Invalid or missing redirect URI" });
+  }
+
+  // x-forwarded-proto: Vercel terminates TLS, so req.protocol reports http
+  const proto = req.get("x-forwarded-proto") || req.protocol || "https";
+  const callbackUrl = `${proto}://${req.get("host")}/api/auth/google/callback`;
+  const params = new URLSearchParams({
+    client_id: GOOGLE_WEB_CLIENT_ID,
+    redirect_uri: callbackUrl,
+    response_type: "id_token",
+    response_mode: "form_post",
+    scope: "openid email profile",
+    nonce: require("crypto").randomBytes(16).toString("hex"),
+    prompt: "select_account",
+    state: redirect,
+  });
+
+  return res.redirect(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+};
+
+export const googleCallback = async (req: Request, res: Response) => {
+  const { id_token, state, error } = (req.body ?? {}) as Record<string, string>;
+  const redirect = typeof state === "string" && isAllowedRedirect(state) ? state : "";
+
+  const fail = (message: string) => {
+    console.warn("googleCallback failed:", message);
+    if (redirect) return res.redirect(303, appendParam(redirect, "error", message));
+    return res.status(400).send(message);
+  };
+
+  try {
+    if (error) return fail(String(error));
+    if (!id_token) return fail("Google did not return an ID token.");
+    if (!redirect) return fail("Missing redirect state.");
+
+    // tokeninfo verifies the signature server-side; we verify the audience
+    const infoResp = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(id_token)}`
+    );
+    if (!infoResp.ok) return fail("Invalid Google token.");
+    const info: any = await infoResp.json();
+
+    if (info.aud !== GOOGLE_WEB_CLIENT_ID) return fail("Token audience mismatch.");
+    if (String(info.email_verified) !== "true") return fail("Google email is not verified.");
+
+    const email = String(info.email).toLowerCase();
+
+    let userRecord;
+    try {
+      userRecord = await adminAuth.getUserByEmail(email);
+    } catch (err: any) {
+      if (err.code === "auth/user-not-found") {
+        userRecord = await adminAuth.createUser({
+          email,
+          emailVerified: true,
+          displayName: info.name || undefined,
+          photoURL: info.picture || undefined,
+        });
+      } else {
+        throw err;
+      }
+    }
+
+    const customToken = await adminAuth.createCustomToken(userRecord.uid);
+    return res.redirect(303, appendParam(redirect, "token", customToken));
+  } catch (err: any) {
+    console.error("googleCallback error:", err);
+    return fail("Google sign-in failed. Please try again.");
+  }
+};

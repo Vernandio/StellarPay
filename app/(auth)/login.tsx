@@ -214,6 +214,7 @@ export default function LoginScreen() {
   // ── Identifier step ───────────────────────────────────────────────────
   const [identifier, setIdentifier] = useState("");
   const [resolvedEmail, setResolvedEmail] = useState("");
+  const [resolvedUid, setResolvedUid] = useState("");
 
   // ── PIN step ──────────────────────────────────────────────────────────
   const [pin, setPin] = useState("");
@@ -235,7 +236,8 @@ export default function LoginScreen() {
     try {
       const result = await resolveUser(identifier.trim());
       setResolvedEmail(result.email ?? "");
-      
+      setResolvedUid(result.uid ?? "");
+
       const { getUserProfile } = require("../../src/services/firebase/firestore");
       const profile = await getUserProfile(result.uid);
       if (profile && profile.hasPin === false) {
@@ -256,11 +258,14 @@ export default function LoginScreen() {
   // ─────────────────────────────────────────────────────────────────────
   const handleBiometricAuth = async () => {
     try {
+      if (!resolvedUid) return;
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return;
 
-      const savedPin = await SecureStore.getItemAsync("saved_pin");
+      // Per-account key: only the PIN saved for THIS resolved account can be
+      // unlocked biometrically — never another account's PIN on this device.
+      const savedPin = await SecureStore.getItemAsync(`saved_pin_${resolvedUid}`);
       if (!savedPin) return;
 
       const result = await LocalAuthentication.authenticateAsync({
@@ -278,8 +283,8 @@ export default function LoginScreen() {
   };
 
   useEffect(() => {
-    if (step === "pin") {
-      AsyncStorage.getItem("biometrics_enabled").then((val) => {
+    if (step === "pin" && resolvedUid) {
+      AsyncStorage.getItem(`biometrics_enabled_${resolvedUid}`).then((val) => {
         if (val === "true") {
           setTimeout(() => {
             handleBiometricAuth();
@@ -287,7 +292,7 @@ export default function LoginScreen() {
         }
       });
     }
-  }, [step]);
+  }, [step, resolvedUid]);
 
   const verifyPinCode = async (code: string) => {
     setIsLoading(true);

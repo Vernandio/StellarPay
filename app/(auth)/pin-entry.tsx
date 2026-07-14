@@ -205,11 +205,14 @@ export default function PinEntryScreen() {
 
   const handleBiometricAuth = async () => {
     try {
+      const uid = auth.currentUser?.uid;
+      if (!uid) return;
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
       if (!hasHardware || !isEnrolled) return;
 
-      const savedPin = await SecureStore.getItemAsync("saved_pin");
+      // Scoped per account — see profile.tsx biometric setup
+      const savedPin = await SecureStore.getItemAsync(`saved_pin_${uid}`);
       if (!savedPin) return;
 
       const result = await LocalAuthentication.authenticateAsync({
@@ -227,7 +230,9 @@ export default function PinEntryScreen() {
   };
 
   useEffect(() => {
-    AsyncStorage.getItem("biometrics_enabled").then((val) => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    AsyncStorage.getItem(`biometrics_enabled_${uid}`).then((val) => {
       if (val === "true") {
         setBiometricsEnabled(true);
         // Wait briefly for UI transitions to settle before showing native prompt

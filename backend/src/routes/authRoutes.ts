@@ -5,6 +5,7 @@ import {
   resolveUser, resolveUserToken,
   sendForgotPinOtp, verifyForgotPinOtp,
   checkAvailability,
+  googleStart, googleCallback,
 } from "../controllers/authController";
 import { requireAuth } from "../middlewares/authMiddleware";
 import { strictRateLimiter } from "../middlewares/rateLimiter";
@@ -32,5 +33,9 @@ router.post("/resolve-user-token", strictRateLimiter, resolveUserToken);
 // Forgot PIN
 router.post("/forgot-pin/send", strictRateLimiter, sendForgotPinOtp);
 router.post("/forgot-pin/verify", strictRateLimiter, verifyForgotPinOtp);
+
+// Google OAuth: browser opens /start, Google form-posts back to /callback
+router.get("/google/start", googleStart);
+router.post("/google/callback", googleCallback);
 
 export default router;

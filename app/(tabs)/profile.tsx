@@ -39,13 +39,17 @@ export default function ProfileScreen() {
     }
   }, [profile?.avatarUrl]);
 
+  // Biometric storage is scoped per account (`saved_pin_<uid>`): a global
+  // key would let the enrolled fingerprint unlock ANY account on this device.
   useEffect(() => {
-    AsyncStorage.getItem("biometrics_enabled").then((val) => {
+    if (!profile?.uid) return;
+    AsyncStorage.getItem(`biometrics_enabled_${profile.uid}`).then((val) => {
       setIsBiometricsEnabled(val === "true");
     });
-  }, []);
+  }, [profile?.uid]);
 
   const handleToggleBiometrics = async () => {
+    if (!profile?.uid) return;
     const hasHardware = await LocalAuthentication.hasHardwareAsync();
     const isEnrolled = await LocalAuthentication.isEnrolledAsync();
     if (!hasHardware || !isEnrolled) {
@@ -54,8 +58,8 @@ export default function ProfileScreen() {
     }
 
     if (isBiometricsEnabled) {
-      await SecureStore.deleteItemAsync("saved_pin");
-      await AsyncStorage.removeItem("biometrics_enabled");
+      await SecureStore.deleteItemAsync(`saved_pin_${profile.uid}`);
+      await AsyncStorage.removeItem(`biometrics_enabled_${profile.uid}`);
       setIsBiometricsEnabled(false);
       Alert.alert("Disabled", "Biometric login has been disabled.");
     } else {
@@ -64,6 +68,7 @@ export default function ProfileScreen() {
   };
 
   const handleBiometricsSetupSuccess = async (verifiedPin: string) => {
+    if (!profile?.uid) return;
     try {
       const result = await LocalAuthentication.authenticateAsync({
         promptMessage: "Confirm Face ID / Fingerprint Setup",
@@ -71,8 +76,11 @@ export default function ProfileScreen() {
       });
 
       if (result.success) {
-        await SecureStore.setItemAsync("saved_pin", verifiedPin);
-        await AsyncStorage.setItem("biometrics_enabled", "true");
+        await SecureStore.setItemAsync(`saved_pin_${profile.uid}`, verifiedPin);
+        await AsyncStorage.setItem(`biometrics_enabled_${profile.uid}`, "true");
+        // Drop the old device-global keys — they could unlock other accounts
+        await SecureStore.deleteItemAsync("saved_pin");
+        await AsyncStorage.removeItem("biometrics_enabled");
         setIsBiometricsEnabled(true);
         Alert.alert("Success", "Biometric login enabled successfully!");
       } else {

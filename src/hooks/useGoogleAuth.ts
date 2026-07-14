@@ -1,73 +1,65 @@
-import { useEffect, useState, useCallback } from "react";
+import { useState, useCallback } from "react";
 import * as WebBrowser from "expo-web-browser";
-import * as Google from "expo-auth-session/providers/google";
 import * as AuthSession from "expo-auth-session";
 import { router } from "expo-router";
 import * as Haptics from "expo-haptics";
-import {
-  signInWithGoogleToken,
-  checkUserProfileExists,
-} from "../services/firebase/auth";
+import { signInWithCustomToken } from "@firebase/auth";
+import { auth } from "../services/firebase/config";
+import { checkUserProfileExists } from "../services/firebase/auth";
+import { API_BASE } from "../services/api/client";
 
-// Completes the auth session and dismisses the in-app browser once Google
-// redirects back to `stellarpay://`. Must run at module scope, before the
+// Completes the auth session and dismisses the in-app browser once the
+// backend redirects back to the app. Must run at module scope, before the
 // component that opens the browser mounts.
 WebBrowser.maybeCompleteAuthSession();
 
 /**
- * Drives the "Continue with Google" flow end to end:
- *   1. Opens Google via expo-auth-session and gets an ID token.
- *   2. Exchanges it for a Firebase session (signInWithGoogleToken).
- *   3. Routes: existing profile → the app; brand-new user → onboarding
- *      (username + phone + PIN), which is where name/email get pre-filled.
+ * Drives the "Continue with Google" flow end to end — via the backend.
  *
- * OAuth client IDs come from EXPO_PUBLIC_GOOGLE_CLIENT_ID (the Web client
- * registered as an authorized provider in Firebase). iOS/Android client IDs
- * are optional and only needed for native standalone/dev builds.
+ * WHY not expo-auth-session's Google provider: Google's web OAuth client
+ * rejects exp:// (Expo Go) and custom-scheme (stellarpay://) redirect URIs,
+ * so the in-app flow can never complete. Instead:
+ *   1. Open `${API_BASE}/api/auth/google/start` in the auth browser.
+ *   2. Google redirects to the backend's https callback (which it accepts);
+ *      the backend verifies the ID token, mints a Firebase custom token,
+ *      and 303-redirects to our deep link with `?token=`.
+ *   3. signInWithCustomToken, then route: existing profile → the app;
+ *      brand-new user → Google onboarding (username + phone + PIN).
+ *
+ * Setup (one-time): the backend callback URL must be listed under
+ * "Authorized redirect URIs" on the Google web client.
  */
 export const useGoogleAuth = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    webClientId: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
-    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
-    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
-  });
+  const promptGoogle = useCallback(async () => {
+    setError(null);
+    setIsProcessing(true);
+    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-  useEffect(() => {
-    if (request?.redirectUri) {
-      console.log("StellarPay Google Auth Redirect URI:", request.redirectUri);
-    }
-  }, [request]);
-
-  useEffect(() => {
-    if (!response) return;
-
-    if (response.type === "success") {
-      const idToken =
-        (response.params as any)?.id_token ??
-        response.authentication?.idToken;
-      if (idToken) {
-        handleGoogleToken(idToken);
-      } else {
-        setError("Google did not return an ID token. Please try again.");
-        setIsProcessing(false);
-      }
-    } else if (response.type === "error") {
-      setError(response.error?.message || "Google sign-in failed.");
-      setIsProcessing(false);
-    } else {
-      // "dismiss" / "cancel" — the user closed the sheet. Not an error.
-      setIsProcessing(false);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [response]);
-
-  const handleGoogleToken = async (idToken: string) => {
     try {
-      const user = await signInWithGoogleToken(idToken);
+      const returnUrl = AuthSession.makeRedirectUri({ path: "google-auth" });
+      const startUrl = `${API_BASE}/api/auth/google/start?redirect=${encodeURIComponent(returnUrl)}`;
+
+      const result = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
+
+      if (result.type !== "success" || !("url" in result) || !result.url) {
+        // "dismiss" / "cancel" — the user closed the sheet. Not an error.
+        setIsProcessing(false);
+        return;
+      }
+
+      // RN's URL lacks searchParams — parse the deep link manually
+      const errMatch = result.url.match(/[?&]error=([^&#]+)/);
+      if (errMatch) throw new Error(decodeURIComponent(errMatch[1]));
+
+      const tokenMatch = result.url.match(/[?&]token=([^&#]+)/);
+      if (!tokenMatch) throw new Error("Google sign-in did not return a token. Please try again.");
+
+      const customToken = decodeURIComponent(tokenMatch[1]);
+      const { user } = await signInWithCustomToken(auth, customToken);
+
       const hasProfile = await checkUserProfileExists(user.uid);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -82,25 +74,7 @@ export const useGoogleAuth = () => {
     } finally {
       setIsProcessing(false);
     }
-  };
+  }, []);
 
-  const promptGoogle = useCallback(async () => {
-    if (!process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID) {
-      setError(
-        "Google sign-in isn't configured. Add EXPO_PUBLIC_GOOGLE_CLIENT_ID to .env."
-      );
-      return;
-    }
-    setError(null);
-    setIsProcessing(true);
-    await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    try {
-      await promptAsync();
-    } catch (err: any) {
-      setError(err.message || "Could not open Google sign-in.");
-      setIsProcessing(false);
-    }
-  }, [promptAsync]);
-
-  return { promptGoogle, isProcessing, error, isReady: !!request };
+  return { promptGoogle, isProcessing, error, isReady: true };
 };
