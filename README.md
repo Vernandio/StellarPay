@@ -4,9 +4,15 @@
 > **📢 Note to Judges:** For the best UI & UX experience, please open and run the **Production Web Application Client** on your **mobile phone's browser** (Safari, Chrome, etc.) as the application interface is custom-tailored for mobile screens.
 
 ### 🌐 Production Deployments & Links
-- **Production Backend API**: [https://stellar-pay-backend-kappa.vercel.app/](https://stellar-pay-backend-kappa.vercel.app/)
 - **Production Web Application Client**: [https://stellar-pay-three.vercel.app/](https://stellar-pay-three.vercel.app/)
-- **Stellar.toml Configuration**: [https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml](https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml)
+- **Android Application (.APK)**: []()
+
+- **Production Backend API**: [https://canva.link/re5geves38x0bgk](https://canva.link/re5geves38x0bgk)
+- **Stellar.toml Configuration**: [https://www.youtube.com/watch?v=37CC4Je8MYw](https://www.youtube.com/watch?v=37CC4Je8MYw)
+
+
+- **Pitchdeck**: [https://stellar-pay-backend-kappa.vercel.app/](https://stellar-pay-backend-kappa.vercel.app/)
+- **Demo Video**: [https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml](https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml)
 
 > [!NOTE]
 > **⚠️ MoneyGram Integration Note:** We are currently awaiting domain whitelist approval from the MoneyGram team. During this pending state, the application is temporarily configured to use the default Stellar Testnet SEP-24 Anchor for demonstrating deposit and withdrawal features. It will be switched over to MoneyGram's API endpoint once approved.
