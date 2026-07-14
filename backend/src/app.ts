@@ -45,7 +45,19 @@ code="USDC"
 issuer="GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
 is_asset_anchored=true
 anchor_asset_type="fiat"
-anchor_asset="USD"`);
+anchor_asset="USD"
+attestation_of_reserve="https://www.centre.io/usdc-transparency"
+redemption_instructions="Redeemable through a Circle account at https://circle.com"
+name="USD Coin"
+desc="USDC is a fully collateralized US Dollar stablecoin, based on the open source fiat stablecoin framework developed by Centre."
+image="https://www.centre.io/images/usdc/usdc-icon-86074d9d49.png"
+
+[DOCUMENTATION]
+ORG_NAME = "MoneyGram"
+ORG_URL = "https://www.moneygram.com"
+ORG_DESCRIPTION = "Cash in and out of USDC at participating MoneyGram locations."
+ORG_LOGO="https://stellar.moneygram.com/assets/images/moneygram-logo.jpg"
+ORG_SUPPORT_EMAIL="customerservice@moneygram.com"`);
 });
 
 // Global Error Handler
