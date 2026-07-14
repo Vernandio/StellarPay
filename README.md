@@ -33,27 +33,35 @@ Here is a showcase of the key features of StellarPay, complete with previews of 
 
 ### 1. 💸 Send Money Instantly (Username, NFC & QR)
 Send funds to anyone in seconds. You can type their unique handle, scan their QR code, or use **NFC (Tap to Pay)** for proximity payments—instantly transferring tokens behind the scenes.
-- **Preview / Showcase**:
-  `![Send Money Showcase](./assets/screenshots/send_showcase.gif)` *(Placeholder: /assets/screenshots/send_showcase.gif)*
+
+| Send via Username | NFC Tap to Pay |
+|:---:|:---:|
+| ![Send money](https://res.cloudinary.com/dr09lvoly/image/upload/v1784063003/send_kklq1d.gif) | ![NFC Pay](https://res.cloudinary.com/dr09lvoly/image/upload/v1784062875/tap_nry6fy.gif) |
 
 ### 2. 📲 Request Money (Username & QR)
 Request payments from friends easily. Users can generate request codes or request money directly via usernames. The recipient receives a real-time push notification and can pay the request with a single tap.
-- **Preview / Showcase**:
-  `![Request Money Showcase](./assets/screenshots/request_showcase.gif)` *(Placeholder: /assets/screenshots/request_showcase.gif)*
+
+| Request via Username | Request via QR Code |
+|:---:|:---:|
+| ![Request by username](https://res.cloudinary.com/dr09lvoly/image/upload/v1784062876/req_qlrpnz.gif) | ![Request by input nominal + QR](https://res.cloudinary.com/dr09lvoly/image/upload/v1784063003/reqqr_cuqko2.gif) |
 
 ### 3. 🧾 On-Chain Split Bill & Escrow
 An AI-powered smart receipt parser and allocation mechanism:
 - **AI OCR Camera Scan**: Uploading a receipt image calls our backend and uses **Gemini 2.5 Flash** to extract line items, prices, tax, discounts, and currency.
 - **Proportional Cost Allocation**: Users can allocate items to specific friends, and the app automatically distributes tax/discounts proportionally.
 - **On-Chain Escrow Contract**: Uses a custom **Soroban Smart Contract** to hold funds in escrow. Organizer claims funds once everyone has paid; participants can claim a refund if the deadline expires.
-- **Preview / Showcase**:
-  `![Split Bill Escrow Showcase](./assets/screenshots/splitbill_showcase.gif)` *(Placeholder: /assets/screenshots/splitbill_showcase.gif)*
+
+<p align="center">
+  <img src="https://res.cloudinary.com/dr09lvoly/image/upload/v1784063004/splitbill_d6likg.gif" alt="Splitbill Escrow Flow" width="320"/>
+</p>
 
 ### 🌏 4. Southeast Asian Merchant Payments (QRIS / QRPH / VietQR)
 StellarPay bridges local fiat payment systems by allowing users to pay national QR codes (**QRIS** in Indonesia, **QRPH** in Philippines, **VietQR** in Vietnam) directly using their Stellar wallet balance.
 - **Merchant Partnership Concept:** In production, this is achieved through partnership with payment processors/vendors, enabling seamless cross-border retail payments without the user needing a local bank account.
-- **Preview / Showcase**:
-  `![Merchant QR Showcase](./assets/screenshots/merchant_qr_showcase.gif)` *(Placeholder: /assets/screenshots/merchant_qr_showcase.gif)*
+
+| Indonesia (QRIS) | Philippines (QRPH) | Vietnam (VietQR) |
+|:---:|:---:|:---:|
+| ![QRIS](https://res.cloudinary.com/dr09lvoly/image/upload/v1784062876/qris_a4yt27.gif) | ![QRPH](https://res.cloudinary.com/dr09lvoly/image/upload/v1784062876/qrph_ypgxzs.gif) | ![Viet QR](https://res.cloudinary.com/dr09lvoly/image/upload/v1784062876/qrviet_qopiqs.gif) |
 
 ### ⚡ 5. Real-Time Horizon SSE Payment Listeners
 Instead of polling the server, the client establishes an active event stream connection to the Stellar Horizon Server-Sent Events (SSE) payment listener. Any incoming or outgoing payments on-chain are intercepted in real-time to update balances and activity streams.
