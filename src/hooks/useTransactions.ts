@@ -112,26 +112,7 @@ export const useTransactions = () => {
         );
       }
 
-      // 1b. Fetch all user's requests to filter out request payment transactions from the Transactions list
-      const requestTxHashes = new Set<string>();
-      if (user?.uid) {
-        try {
-          const [sentSnap, receivedSnap] = await Promise.all([
-            getDocs(query(collection(db, "requests"), where("senderUid", "==", user.uid))),
-            getDocs(query(collection(db, "requests"), where("receiverUid", "==", user.uid)))
-          ]);
-          sentSnap.docs.forEach((d) => {
-            const data = d.data();
-            if (data.txHash) requestTxHashes.add(data.txHash);
-          });
-          receivedSnap.docs.forEach((d) => {
-            const data = d.data();
-            if (data.txHash) requestTxHashes.add(data.txHash);
-          });
-        } catch (rErr) {
-          console.warn("Failed to fetch requests for transaction filtering:", rErr);
-        }
-      }
+
 
       const parsed: Activity[] = records
         // create_account is the one-time Friendbot funding operation (testnet's
@@ -141,10 +122,6 @@ export const useTransactions = () => {
           const isPayment = r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive";
           if (!isPayment) return false;
           
-          // Filter out request payments
-          if (requestTxHashes.has(r.transaction_hash)) {
-            return false;
-          }
           return true;
         })
         .map((record: any) => {
@@ -239,23 +216,30 @@ export const useTransactions = () => {
           };
         });
 
-      // 4. Merge in incoming Firestore transfers that have no matching on-chain
-      //    payment. Anchor deposits ("Add Money") land here: the feed above is
-      //    built purely from Horizon history, so a completed deposit whose funds
-      //    the sandbox anchor never settled on-chain would otherwise be invisible.
-      //    Restricted to incoming (receiver === current user) because outgoing
-      //    transfers (withdrawals, P2P sends) always produce a reliable on-chain
-      //    row; deduped by hash so a deposit that DID settle on-chain isn't doubled.
+      // 4. Merge in Firestore transfers that have no matching on-chain payment
+      //    row. Two flows land here: anchor deposits ("Add Money") whose funds
+      //    the sandbox anchor never settled on-chain, and split-bill escrow
+      //    payments — those are Soroban invoke_host_function ops, which
+      //    Horizon's /payments feed doesn't return, in either direction.
+      //    Deduped by hash so a transfer that DID settle on-chain isn't doubled.
       const renderedHashes = new Set(parsed.map((a) => a.hash));
       const firestoreOnly: Activity[] = firestoreTxs
-        .filter((tx) => tx.hash && !renderedHashes.has(tx.hash) && tx.receiverUid === user?.uid)
+        .filter((tx) => tx.hash && !renderedHashes.has(tx.hash) &&
+          // Incoming escrow shares are excluded: the organizer's "+" only
+          // appears when they claim the collected funds from the contract
+          (tx.senderUid === user?.uid ||
+            (tx.receiverUid === user?.uid && !tx.escrowShare)))
         .map((tx) => {
           const dateObj = tx.createdAt?.toDate ? tx.createdAt.toDate() : new Date();
           const { time, dateSection } = getDateParts(dateObj);
 
-          const title = tx.senderDisplayName || `@${tx.senderUsername}`;
+          const isIncoming = tx.receiverUid === user?.uid;
+          const title = isIncoming
+            ? (tx.senderDisplayName || `@${tx.senderUsername}`)
+            : (tx.receiverDisplayName || `@${tx.receiverUsername}`);
+          const prefix = isIncoming ? "+" : "-";
 
-          const usdStr = `+ $${parseFloat(tx.amountUSD).toFixed(2)}`;
+          const usdStr = `${prefix} $${parseFloat(tx.amountUSD).toFixed(2)}`;
           let amountPrimary = usdStr;
           let amountSecondary: string | undefined;
           if (tx.displayCurrency && tx.displayCurrency !== "USD") {
@@ -264,19 +248,19 @@ export const useTransactions = () => {
               minimumFractionDigits: noDecimals ? 0 : 2,
               maximumFractionDigits: noDecimals ? 0 : 2,
             });
-            amountPrimary = `+ ${tx.displayCurrency} ${formattedLocal}`;
+            amountPrimary = `${prefix} ${tx.displayCurrency} ${formattedLocal}`;
             amountSecondary = usdStr;
           }
 
           return {
             id: tx.hash,
-            type: "received",
+            type: isIncoming ? "received" : "sent",
             title,
             time,
             amountPrimary,
             amountSecondary,
-            icon: "arrow-down-left",
-            isPositive: true,
+            icon: isIncoming ? "arrow-down-left" : "arrow-up-right",
+            isPositive: isIncoming,
             dateSection,
             extra: tx.hash.substring(0, 8),
             hash: tx.hash,

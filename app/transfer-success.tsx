@@ -87,7 +87,7 @@ export default function TransferSuccessScreen() {
         {/* Animated Text Content */}
         <Animated.View style={[{ alignItems: "center" }, contentStyle]}>
           <Text style={[Typography.labelLarge, { color: Colors.textLightSecondary, marginBottom: Spacing.xs }]}>
-            {params.type === "request" ? "Request Sent" : "Successfully Sent"}
+            {params.type === "request" ? "Request Sent" : params.type === "withdraw" ? "Withdrawal Complete" : params.type === "refund" ? "Refund Complete" : "Successfully Sent"}
           </Text>
           <Text style={[Typography.displayLarge, { color: Colors.textLightPrimary, marginBottom: Spacing.xl }]}>
             {params.amount} {params.currency}
@@ -115,7 +115,11 @@ export default function TransferSuccessScreen() {
         <TouchableOpacity
           onPress={() => {
             Haptics.selectionAsync();
-            router.dismissAll(); // Go back to root (home)
+            if (router.canGoBack()) {
+              router.back();
+            } else {
+              router.replace("/(tabs)");
+            }
           }}
           style={{
             backgroundColor: "#111111",

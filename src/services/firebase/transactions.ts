@@ -22,6 +22,12 @@ export interface TransactionRecord {
   displayAmount: string;
   memo: string;
   status: "completed" | "failed";
+  /**
+   * True for a participant's payment INTO the split-bill escrow contract.
+   * The named receiver (organizer) hasn't received these funds yet — their
+   * feed shows a single "+" row only when they claim from the escrow.
+   */
+  escrowShare?: boolean;
   createdAt: Timestamp;
 }
 

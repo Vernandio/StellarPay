@@ -11,6 +11,7 @@ import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/
 import ViewShot from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { DateField } from "../../src/components/ui/DateField";
+import { router } from "expo-router";
 
 import { useTransactions, Activity } from "../../src/hooks/useTransactions";
 import { useAuthStore } from "../../src/store/authStore";
@@ -172,6 +173,9 @@ export default function ActivityScreen() {
         displayAmount: selectedRequest.amountUSD,
         memo: selectedRequest.message || "",
         status: "completed",
+        // Escrow shares go to the contract, not the organizer — hide the
+        // "+" from the organizer's feed until they claim
+        ...(selectedRequest.onChainBillId ? { escrowShare: true } : {}),
       });
 
       await createNotification({
@@ -191,10 +195,21 @@ export default function ActivityScreen() {
       });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Success", `Paid $${parseFloat(selectedRequest.amountUSD).toFixed(2)} USD successfully.`);
-      
       requestSheetRef.current?.dismiss();
       refreshBalances();
+
+      router.push({
+        pathname: "/transfer-success",
+        params: {
+          amount: parseFloat(selectedRequest.amountUSD).toFixed(2),
+          currency: "USD",
+          displayCurrency: "USD",
+          displayAmount: parseFloat(selectedRequest.amountUSD).toFixed(2),
+          name: selectedRequest.senderDisplayName || selectedRequest.senderUsername,
+          hash: txHash,
+        }
+      });
+      
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Payment Failed", err.message || "Failed to pay request.");
@@ -318,14 +333,41 @@ export default function ActivityScreen() {
 
       const total = billRequests.reduce((sum, r) => sum + parseFloat(r.amountUSD || "0"), 0);
 
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Funds Claimed", `$${total.toFixed(2)} USD released from escrow to your wallet.`);
+      // The single "+" row for the organizer — their balance actually
+      // increases here, not when participants paid into the contract
+      await saveTransaction({
+        hash: claimTxHash,
+        senderUid: "escrow",
+        senderUsername: "escrow",
+        senderDisplayName: "Split Bill Escrow",
+        receiverUid: user.uid,
+        receiverUsername: profile?.username || "",
+        amountUSD: total.toFixed(2),
+        displayCurrency: "USD",
+        displayAmount: total.toFixed(2),
+        memo: "Split bill escrow claim",
+        status: "completed",
+      });
 
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       requestSheetRef.current?.dismiss();
       refreshBalances();
+
+      router.push({
+        pathname: "/transfer-success",
+        params: {
+          type: "withdraw",
+          amount: total.toFixed(2),
+          currency: "USD",
+          displayCurrency: "USD",
+          displayAmount: total.toFixed(2),
+          name: "Wallet",
+          hash: claimTxHash,
+        }
+      });
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("Claim Failed", err.message || "Failed to claim escrowed funds.");
+      Alert.alert("Claim Failed", err.message || "Failed to withdraw funds.");
     } finally {
       setIsProcessingRequest(false);
       setSelectedRequest(null);
@@ -345,19 +387,47 @@ export default function ActivityScreen() {
 
       await updatePaymentRequest(liveRequest.id, { status: "refunded", refundTxHash });
 
+      // Record the refund so it appears in history (a Soroban op, so
+      // Horizon's payments feed won't surface it). Sender is the escrow,
+      // not the organizer — the organizer never held these funds.
+      await saveTransaction({
+        hash: refundTxHash,
+        senderUid: "escrow",
+        senderUsername: "escrow",
+        senderDisplayName: "Split Bill Escrow",
+        receiverUid: user.uid,
+        receiverUsername: profile?.username || "",
+        amountUSD: liveRequest.amountUSD,
+        displayCurrency: "USD",
+        displayAmount: liveRequest.amountUSD,
+        memo: "Split bill escrow refund",
+        status: "completed",
+      });
+
       await createNotification({
         uid: liveRequest.senderUid,
-        title: "Escrow Refunded",
+        title: "Payment Refunded",
         message: `${profile?.displayName || profile?.username} refunded their $${parseFloat(liveRequest.amountUSD).toFixed(2)} USD share from the expired split bill.`,
         type: "request_declined",
         referenceId: liveRequest.id,
       });
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Refund Complete", `$${parseFloat(liveRequest.amountUSD).toFixed(2)} USD returned to your wallet.`);
-
       requestSheetRef.current?.dismiss();
       refreshBalances();
+
+      router.push({
+        pathname: "/transfer-success",
+        params: {
+          type: "refund",
+          amount: parseFloat(liveRequest.amountUSD).toFixed(2),
+          currency: "USD",
+          displayCurrency: "USD",
+          displayAmount: parseFloat(liveRequest.amountUSD).toFixed(2),
+          name: "Wallet",
+          hash: refundTxHash,
+        }
+      });
     } catch (err: any) {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       Alert.alert("Refund Failed", err.message || "Failed to refund your share.");
@@ -857,18 +927,18 @@ export default function ActivityScreen() {
                 <>
                   <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                     <View style={{ flexDirection: "row", alignItems: "center" }}>
-                      <Feather name="shield" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
-                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Escrow Bill</Text>
+                      <Feather name="shield" size={14} color={Colors.textLightSecondary} style={{ marginRight: 6 }} />
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Secured Bill</Text>
                     </View>
-                    <Text style={[Typography.labelLarge, { color: Colors.primary, fontWeight: "700" }]}>
-                      #{selectedRequest.onChainBillId} on-chain
+                    <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
+                      #{selectedRequest.onChainBillId}
                     </Text>
                   </View>
 
                   {isOrganizerOfBill && billRequests.length > 0 ? (
                     <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
-                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Shares Collected</Text>
-                      <Text style={[Typography.labelLarge, { color: allSharesPaid ? Colors.teal : Colors.amber, fontWeight: "700" }]}>
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Payments Collected</Text>
+                      <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
                         {billRequests.filter((r) => r.status === "paid" || r.status === "claimed").length} of {billRequests.length}
                       </Text>
                     </View>
@@ -898,7 +968,7 @@ export default function ActivityScreen() {
                 {isProcessingRequest ? (
                   <ActivityIndicator color={Colors.white} />
                 ) : (
-                  <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>CLAIM FUNDS FROM ESCROW</Text>
+                  <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>WITHDRAW FUNDS</Text>
                 )}
               </TouchableOpacity>
             ) : canRefundShare ? (
