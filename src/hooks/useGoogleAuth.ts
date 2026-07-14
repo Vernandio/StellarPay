@@ -13,6 +13,13 @@ import { API_BASE } from "../services/api/client";
 // component that opens the browser mounts.
 WebBrowser.maybeCompleteAuthSession();
 
+// True while promptGoogle is mid-flow. The stellarpay://google-auth deep
+// link ALSO navigates the router to app/google-auth.tsx (Android delivers
+// the redirect as an intent) — that screen checks this flag so warm flows
+// aren't signed in twice.
+let inFlight = false;
+export const isGoogleAuthInFlight = () => inFlight;
+
 /**
  * Drives the "Continue with Google" flow end to end — via the backend.
  *
@@ -36,6 +43,7 @@ export const useGoogleAuth = () => {
   const promptGoogle = useCallback(async () => {
     setError(null);
     setIsProcessing(true);
+    inFlight = true;
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
     try {
@@ -72,6 +80,7 @@ export const useGoogleAuth = () => {
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(err.message || "Failed to sign in with Google.");
     } finally {
+      inFlight = false;
       setIsProcessing(false);
     }
   }, []);
