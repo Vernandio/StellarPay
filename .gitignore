@@ -3,7 +3,7 @@
 # dependencies
 node_modules/
 # ...but Expo's web export vendors the icon fonts under
-# dist/assets/node_modules/. The blanket ignore above also matches that path,
+# dist/assets/vendor/. The blanket ignore above also matches that path,
 # which silently drops every icon .ttf from the committed dist/ — so on the
 # Vercel deploy the fonts 404, get served index.html, and all icons render as
 # missing-glyph "tofu" boxes. Keep the exported dist node_modules.

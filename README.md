@@ -1,4 +1,4 @@
-# StellarPay: Invisible Web3 Wallet (Web2.5 Architecture)
+# StellarPay: Invisible Web3 Wallet
 
 > [!IMPORTANT]
 > **📢 Note to Judges:** For the best UI & UX experience, please open and run the **Production Web Application Client** on your **mobile phone's browser** (Safari, Chrome, etc.) as the application interface is custom-tailored for mobile screens.
@@ -171,4 +171,4 @@ To prevent brute-force attacks on sensitive transaction flows:
 
 - **Vernandio Rivaldo**
 - **Jason**
-- **Natha Buddhi Pratama Chandra**
+- **Natha Buddhi Pratama Chandra**.

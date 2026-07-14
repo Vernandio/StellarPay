@@ -11,17 +11,7 @@ const fs = require("fs");
 const path = require("path");
 
 const DIST = path.resolve(__dirname, "..", "dist");
-const FONTS_DIR = path.join(
-  DIST,
-  "assets",
-  "node_modules",
-  "@expo",
-  "vector-icons",
-  "build",
-  "vendor",
-  "react-native-vector-icons",
-  "Fonts"
-);
+const FONTS_DIR = path.join(DIST, "assets", "node_modules", "@expo", "vector-icons", "build", "vendor", "react-native-vector-icons", "Fonts");
 
 // Map: CSS font-family name  →  file name prefix (before the hash)
 const FONT_MAP = {
@@ -49,10 +39,7 @@ function findFontFile(prefix) {
   const match = files.find((f) => f.startsWith(prefix + ".") && f.endsWith(".ttf"));
   if (!match) return null;
   // Return web-root-relative path
-  return (
-    "/assets/node_modules/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/" +
-    match
-  );
+  return "/assets/vendor/@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/" + match;
 }
 
 function buildFontFaceCSS() {
@@ -63,9 +50,7 @@ function buildFontFaceCSS() {
       console.warn(`⚠  Font file not found for "${family}" (prefix: ${prefix})`);
       continue;
     }
-    rules.push(
-      `@font-face { font-family: "${family}"; src: url("${src}") format("truetype"); font-display: swap; }`
-    );
+    rules.push(`@font-face { font-family: "${family}"; src: url("${src}") format("truetype"); font-display: swap; }`);
   }
   return rules.join("\n");
 }
@@ -98,9 +83,7 @@ function inject() {
 
   // Write vercel.json with SPA rewrites into dist
   const vercelConfig = {
-    rewrites: [
-      { source: "/(.*)", destination: "/index.html" }
-    ]
+    rewrites: [{ source: "/(.*)", destination: "/index.html" }],
   };
   fs.writeFileSync(path.join(DIST, "vercel.json"), JSON.stringify(vercelConfig, null, 2), "utf-8");
   console.log("✅  Wrote vercel.json (SPA rewrites) into dist/");
