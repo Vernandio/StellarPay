@@ -7,12 +7,12 @@
 - **Production Web Application Client**: [https://stellar-pay-three.vercel.app/](https://stellar-pay-three.vercel.app/)
 - **Android Application (.APK)**: [https://drive.google.com/file/d/1GvvLtOEf-mZe90iUtNgMokE5LvEgJSaV/view?usp=sharing](https://drive.google.com/file/d/1GvvLtOEf-mZe90iUtNgMokE5LvEgJSaV/view?usp=sharing)
 
-- **Production Backend API**: [https://canva.link/re5geves38x0bgk](https://canva.link/re5geves38x0bgk)
-- **Stellar.toml Configuration**: [https://www.youtube.com/watch?v=37CC4Je8MYw](https://www.youtube.com/watch?v=37CC4Je8MYw)
+- **Production Backend API**: [https://stellar-pay-backend-kappa.vercel.app/](https://stellar-pay-backend-kappa.vercel.app/)
+- **Stellar.toml Configuration**: [https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml](https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml)
 
+- **Pitchdeck**: [https://canva.link/re5geves38x0bgk](https://canva.link/re5geves38x0bgk)
+- **Demo Video**: [https://www.youtube.com/watch?v=37CC4Je8MYw](https://www.youtube.com/watch?v=37CC4Je8MYw)
 
-- **Pitchdeck**: [https://stellar-pay-backend-kappa.vercel.app/](https://stellar-pay-backend-kappa.vercel.app/)
-- **Demo Video**: [https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml](https://stellar-pay-backend-kappa.vercel.app/.well-known/stellar.toml)
 
 > [!NOTE]
 > **⚠️ MoneyGram Integration Note:** We are currently awaiting domain whitelist approval from the MoneyGram team. During this pending state, the application is temporarily configured to use the default Stellar Testnet SEP-24 Anchor for demonstrating deposit and withdrawal features. It will be switched over to MoneyGram's API endpoint once approved.
