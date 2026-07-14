@@ -95,6 +95,15 @@ function inject() {
 
   fs.writeFileSync(indexPath, html, "utf-8");
   console.log(`✅  Injected ${Object.keys(FONT_MAP).length} @font-face rules into dist/index.html`);
+
+  // Write vercel.json with SPA rewrites into dist
+  const vercelConfig = {
+    rewrites: [
+      { source: "/(.*)", destination: "/index.html" }
+    ]
+  };
+  fs.writeFileSync(path.join(DIST, "vercel.json"), JSON.stringify(vercelConfig, null, 2), "utf-8");
+  console.log("✅  Wrote vercel.json (SPA rewrites) into dist/");
 }
 
 inject();
