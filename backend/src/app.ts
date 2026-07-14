@@ -28,6 +28,26 @@ app.use("/api/qr", qrRoutes);
 app.use("/api/rates", ratesRoutes);
 app.use("/api/ocr", ocrRoutes);
 
+// Stellar.toml configuration endpoint for SEP-10 & SEP-24 validation
+app.get("/.well-known/stellar.toml", (req, res) => {
+  res.setHeader("Content-Type", "text/plain");
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.send(`ACCOUNTS = []
+VERSION = "0.1.0"
+NETWORK_PASSPHRASE="Test SDF Network ; September 2015"
+SIGNING_KEY="GD5NUMEX7LYHXGXCAD4PGW7JDMOUY2DKRGY5XZHJS5IONVHDKCJYGVCL"
+
+WEB_AUTH_ENDPOINT="https://extstellar.moneygram.com/stellaradapterservice/auth"
+TRANSFER_SERVER_SEP0024="https://extstellar.moneygram.com/stellaradapterservice/sep24"
+
+[[CURRENCIES]]
+code="USDC"
+issuer="GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5"
+is_asset_anchored=true
+anchor_asset_type="fiat"
+anchor_asset="USD"`);
+});
+
 // Global Error Handler
 app.use(errorHandler);
 
