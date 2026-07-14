@@ -293,11 +293,15 @@ export default function LoginScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      // Sign in the Firebase user by their resolved email via OTP (no password needed)
-      // In this flow, the backend already issued a customToken during OTP verification.
-      // Here we just call verifyPin which requires an authenticated session.
-      // If no session, sign in via the backend resolve endpoint with a temp token.
-      if (!auth.currentUser) {
+      // Ensure we are signed in as the correct resolved user.
+      // If there's an active session for a different email, sign it out first.
+      if (
+        !auth.currentUser || 
+        auth.currentUser.email?.toLowerCase() !== resolvedEmail.toLowerCase()
+      ) {
+        if (auth.currentUser) {
+          await auth.signOut();
+        }
         const { customToken } = await apiClient.post<{ customToken: string }>(
           "/api/auth/resolve-user-token",
           { email: resolvedEmail }
@@ -307,6 +311,10 @@ export default function LoginScreen() {
 
       const valid = await verifyPin(code);
       if (!valid) throw new Error("Incorrect PIN. Please try again.");
+      
+      // Clear failed PIN attempts on successful login
+      await AsyncStorage.removeItem("failed_pin_attempts");
+      
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (err: any) {

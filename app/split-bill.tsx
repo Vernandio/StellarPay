@@ -11,12 +11,15 @@ import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { showToast } from "../src/store/toastStore";
 
-import { searchUser, getSuggestedFriends } from "../src/services/firebase/firestore";
+import { searchUser, getSuggestedFriends, getUserByUsername } from "../src/services/firebase/firestore";
 import { useAuthStore } from "../src/store/authStore";
 import { Friend } from "../src/types";
 import { apiClient } from "../src/services/api/client";
 import { createPaymentRequest } from "../src/services/firebase/requests";
 import { createNotification } from "../src/services/firebase/notifications";
+import { createOnChainBill } from "../src/services/stellar/contracts";
+import { SPLIT_BILL_CONTRACT_ID } from "../src/constants/contracts";
+import { USDC_ASSET } from "../src/constants/stellar";
 
 type Step = "select_friends" | "choose_method" | "review_bill" | "split_nominals";
 
@@ -372,8 +375,61 @@ export default function SplitBillScreen() {
     const splits = getParticipantSplitAmounts();
     const breakdowns = getParticipantSplitBreakdowns();
     setIsSubmitting(true);
+
     try {
-      // Loop through all selected friends and submit requests
+      let onChainBillId: number | undefined = undefined;
+      let contractTxHash: string | undefined = undefined;
+
+      // Check if Soroban Contract ID is set, if so execute on-chain escrow path
+      if (SPLIT_BILL_CONTRACT_ID) {
+        showToast("Resolving participants' Stellar accounts...", "info");
+        
+        const participantKeys: string[] = [];
+        const participantAmounts: number[] = [];
+
+        for (const friend of selectedFriends) {
+          const amount = splits[friend.id] || 0;
+          if (amount <= 0) continue;
+
+          // Lookup friend profile to get their public key
+          const username = friend.handle.replace("@", "");
+          const friendProfile = await getUserByUsername(username);
+
+          if (!friendProfile || !friendProfile.stellarPublicKey) {
+            throw new Error(`User @${username} does not have a Stellar address setup yet.`);
+          }
+
+          participantKeys.push(friendProfile.stellarPublicKey);
+          
+          // USDC has 7 decimals on Stellar (1 USDC = 10,000,000 stroops/units)
+          const requestedUSD = currency === "USD" ? amount : amount / 15000;
+          participantAmounts.push(Math.round(requestedUSD * 10_000_000));
+        }
+
+        if (participantKeys.length > 0) {
+          if (!profile?.uid || !profile?.stellarPublicKey) {
+            throw new Error("Your wallet is not configured for Stellar transactions.");
+          }
+
+          showToast("Deploying on-chain escrow contract...", "info");
+
+          // Set deadline to 7 days from now (in seconds)
+          const deadlineSec = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+
+          const result = await createOnChainBill(
+            profile.uid,
+            profile.stellarPublicKey,
+            participantKeys,
+            participantAmounts,
+            deadlineSec
+          );
+
+          onChainBillId = result.billId;
+          contractTxHash = result.txHash;
+        }
+      }
+
+      // Loop through all selected friends and submit requests to Firestore
       for (const friend of selectedFriends) {
         const amount = splits[friend.id] || 0;
         if (amount <= 0) continue;
@@ -414,12 +470,16 @@ export default function SplitBillScreen() {
           tipsAmount: friendBreakdown?.tips.toFixed(2),
           discountAmount: friendBreakdown?.discount.toFixed(2),
           subtotalAmount: friendBreakdown?.subtotal.toFixed(2),
+          onChainBillId,
+          contractTxHash,
         });
 
         await createNotification({
           uid: friend.id,
-          title: "Split Bill Request",
-          message: `${profile?.displayName || profile?.username} requested ${currency} ${currency === "IDR" || currency === "VND" ? Math.round(amount).toLocaleString() : amount.toFixed(2)} for a split bill.`,
+          title: onChainBillId ? "On-Chain Split Bill Request" : "Split Bill Request",
+          message: onChainBillId 
+            ? `${profile?.displayName || profile?.username} requested an escrow-secured split bill payment of ${currency} ${currency === "IDR" || currency === "VND" ? Math.round(amount).toLocaleString() : amount.toFixed(2)}.`
+            : `${profile?.displayName || profile?.username} requested ${currency} ${currency === "IDR" || currency === "VND" ? Math.round(amount).toLocaleString() : amount.toFixed(2)} for a split bill.`,
           type: "request_received",
           referenceId: requestId,
         });
@@ -440,7 +500,7 @@ export default function SplitBillScreen() {
       const nameStr = selectedFriends.length === 1 
         ? selectedFriends[0].name 
         : `${selectedFriends[0].name} & ${selectedFriends.length - 1} others`;
-
+      
       showToast(`Requested ${currency} ${totalAmountStr} from ${nameStr}`, "success");
       router.back();
     } catch (err: any) {

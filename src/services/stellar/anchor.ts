@@ -2,7 +2,7 @@ import { Keypair, TransactionBuilder, Asset, BASE_FEE, Memo, Operation } from "@
 import { Buffer } from "buffer";
 import { getHorizonServer, loadAccount } from "./client";
 import { loadKeypairFromSecureStore } from "./wallet";
-import { ACTIVE_NETWORK, USDC_ASSET } from "../../constants/stellar";
+import { ACTIVE_NETWORK, USDC_ASSET, CLIENT_DOMAIN } from "../../constants/stellar";
 
 export interface AnchorConfig {
   transferServer: string | null;
@@ -81,7 +81,10 @@ export const authenticateSEP10 = async (
   const activePublicKey = keypair.publicKey();
 
   // ── Step 2: Fetch challenge XDR from the Anchor ─────────────────────
-  const challengeUrl = `${webAuthEndpoint}?account=${activePublicKey}`;
+  const isTestAnchor = webAuthEndpoint.includes("testanchor.stellar.org");
+  const challengeUrl = isTestAnchor
+    ? `${webAuthEndpoint}?account=${activePublicKey}`
+    : `${webAuthEndpoint}?account=${activePublicKey}&client_domain=${CLIENT_DOMAIN}`;
   const challengeResp = await fetch(challengeUrl);
   if (!challengeResp.ok) {
     throw new Error(`Failed to fetch challenge transaction: ${challengeResp.statusText}`);

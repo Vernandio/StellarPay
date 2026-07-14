@@ -30,3 +30,7 @@ export const BASE_FEE = "100";
 
 // Default memo prefix for StellarPay transactions
 export const APP_MEMO_PREFIX = "SP:";
+
+// Client domain where stellar.toml is hosted (required by MoneyGram SEP-10 auth)
+export const CLIENT_DOMAIN = process.env.EXPO_PUBLIC_CLIENT_DOMAIN || "stellar-pay-backend-kappa.vercel.app";
+

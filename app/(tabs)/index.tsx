@@ -23,6 +23,7 @@ import { doc as fsDoc, getDoc, updateDoc } from "firebase/firestore";
 import { InteractiveAnchorModal } from "../../src/components/InteractiveAnchorModal";
 import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
 import { subscribeToPendingRequests, updatePaymentRequest, PaymentRequest } from "../../src/services/firebase/requests";
+import { payOnChainShare } from "../../src/services/stellar/contracts";
 import { saveTransaction } from "../../src/services/firebase/transactions";
 import { createNotification } from "../../src/services/firebase/notifications";
 import { getUserProfile } from "../../src/services/firebase/firestore";
@@ -221,20 +222,33 @@ export default function Index() {
     setIsProcessingPayment(true);
 
     try {
-      // Look up requester's public key
-      const requester = await getUserProfile(selectedRequest.senderUid);
-      if (!requester?.stellarPublicKey) {
-        throw new Error("This person hasn't finished setting up their account yet.");
-      }
+      let txHash = "";
 
-      // Execute USDC payment on Stellar
-      const txHash = await send(
-        requester.stellarPublicKey,
-        selectedRequest.amountUSD,
-        "USDC",
-        selectedRequest.message,
-        selectedRequest.senderUid
-      );
+      if (selectedRequest.onChainBillId) {
+        if (!profile?.stellarPublicKey) {
+          throw new Error("Your wallet is not configured for Stellar transactions.");
+        }
+        txHash = await payOnChainShare(
+          user.uid,
+          profile.stellarPublicKey,
+          selectedRequest.onChainBillId
+        );
+      } else {
+        // Look up requester's public key
+        const requester = await getUserProfile(selectedRequest.senderUid);
+        if (!requester?.stellarPublicKey) {
+          throw new Error("This person hasn't finished setting up their account yet.");
+        }
+
+        // Execute USDC payment on Stellar
+        txHash = await send(
+          requester.stellarPublicKey,
+          selectedRequest.amountUSD,
+          "USDC",
+          selectedRequest.message,
+          selectedRequest.senderUid
+        );
+      }
 
       // Update payment request status in Firestore
       await updatePaymentRequest(selectedRequest.id, {
@@ -304,7 +318,7 @@ export default function Index() {
         style: "destructive",
         onPress: async () => {
           try {
-            await updatePaymentRequest(req.id, { status: "declined" });
+            await updatePaymentRequest(req.id, { status: isSent ? "canceled" : "declined" });
 
             if (!isSent) {
               // Notify the requester

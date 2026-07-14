@@ -6,6 +6,8 @@ import { getRecentTransactions, TransactionRecord } from "../services/firebase/t
 import { USDC_ASSET } from "../constants/stellar";
 import { getUserByPublicKey, UserProfile } from "../services/firebase/firestore";
 import { formatAmount } from "../utils/format";
+import { collection, query, where, getDocs } from "@firebase/firestore";
+import { db } from "../services/firebase/config";
 
 export type ActivityType = "sent" | "received" | "swap";
 
@@ -110,11 +112,41 @@ export const useTransactions = () => {
         );
       }
 
+      // 1b. Fetch all user's requests to filter out request payment transactions from the Transactions list
+      const requestTxHashes = new Set<string>();
+      if (user?.uid) {
+        try {
+          const [sentSnap, receivedSnap] = await Promise.all([
+            getDocs(query(collection(db, "requests"), where("senderUid", "==", user.uid))),
+            getDocs(query(collection(db, "requests"), where("receiverUid", "==", user.uid)))
+          ]);
+          sentSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.txHash) requestTxHashes.add(data.txHash);
+          });
+          receivedSnap.docs.forEach((d) => {
+            const data = d.data();
+            if (data.txHash) requestTxHashes.add(data.txHash);
+          });
+        } catch (rErr) {
+          console.warn("Failed to fetch requests for transaction filtering:", rErr);
+        }
+      }
+
       const parsed: Activity[] = records
         // create_account is the one-time Friendbot funding operation (testnet's
         // initial 10000 XLM grant) that opens every new account — not a
         // transaction the user made, so it never belongs in their history.
-        .filter((r: any) => r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive")
+        .filter((r: any) => {
+          const isPayment = r.type === "payment" || r.type === "path_payment_strict_send" || r.type === "path_payment_strict_receive";
+          if (!isPayment) return false;
+          
+          // Filter out request payments
+          if (requestTxHashes.has(r.transaction_hash)) {
+            return false;
+          }
+          return true;
+        })
         .map((record: any) => {
           const isSender = record.from === publicKey;
           const isReceiver = record.to === publicKey;

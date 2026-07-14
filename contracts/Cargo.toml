@@ -1,0 +1,3 @@
+[workspace]
+members = ["split_bill"]
+resolver = "2"

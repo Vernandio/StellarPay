@@ -22,6 +22,7 @@ import { useWallet } from "../../src/hooks/useWallet";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
 import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
+import { payOnChainShare } from "../../src/services/stellar/contracts";
 
 export default function ActivityScreen() {
   const [activeTab, setActiveTab] = useState<"Transactions" | "Requests">("Transactions");
@@ -118,18 +119,31 @@ export default function ActivityScreen() {
     setIsProcessingRequest(true);
 
     try {
-      const requester = await getUserProfile(selectedRequest.senderUid);
-      if (!requester?.stellarPublicKey) {
-        throw new Error("This person hasn't finished setting up their account yet.");
-      }
+      let txHash = "";
 
-      const txHash = await send(
-        requester.stellarPublicKey,
-        selectedRequest.amountUSD,
-        "USDC",
-        selectedRequest.message,
-        selectedRequest.senderUid
-      );
+      if (selectedRequest.onChainBillId) {
+        if (!profile?.stellarPublicKey) {
+          throw new Error("Your wallet is not configured for Stellar transactions.");
+        }
+        txHash = await payOnChainShare(
+          user.uid,
+          profile.stellarPublicKey,
+          selectedRequest.onChainBillId
+        );
+      } else {
+        const requester = await getUserProfile(selectedRequest.senderUid);
+        if (!requester?.stellarPublicKey) {
+          throw new Error("This person hasn't finished setting up their account yet.");
+        }
+
+        txHash = await send(
+          requester.stellarPublicKey,
+          selectedRequest.amountUSD,
+          "USDC",
+          selectedRequest.message,
+          selectedRequest.senderUid
+        );
+      }
 
       await updatePaymentRequest(selectedRequest.id, {
         status: "paid",
@@ -201,7 +215,7 @@ export default function ActivityScreen() {
           onPress: async () => {
             setIsProcessingRequest(true);
             try {
-              await updatePaymentRequest(selectedRequest.id, { status: "declined" });
+              await updatePaymentRequest(selectedRequest.id, { status: isSent ? "canceled" : "declined" });
 
               if (!isSent) {
                 await createNotification({
@@ -468,6 +482,7 @@ export default function ActivityScreen() {
                 let statusColor: string = Colors.amber;
                 if (item.status === "paid") statusColor = Colors.teal;
                 if (item.status === "declined") statusColor = Colors.danger;
+                if (item.status === "canceled") statusColor = Colors.textMuted;
 
                 return (
                   <TouchableOpacity
@@ -686,13 +701,13 @@ export default function ActivityScreen() {
               <View style={{ 
                 flexDirection: "row", 
                 alignItems: "center", 
-                backgroundColor: (selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : Colors.amber) + "20", 
+                backgroundColor: (selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : selectedRequest.status === "canceled" ? Colors.textMuted : Colors.amber) + "20", 
                 paddingHorizontal: 12, 
                 paddingVertical: 6, 
                 borderRadius: 99 
               }}>
                 <Text style={[Typography.labelSmall, { 
-                  color: selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : Colors.amber, 
+                  color: selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : selectedRequest.status === "canceled" ? Colors.textMuted : Colors.amber, 
                   fontWeight: "700", 
                   textTransform: "uppercase", 
                   fontSize: 11 
@@ -765,7 +780,11 @@ export default function ActivityScreen() {
                   disabled={isProcessingRequest}
                   style={{ height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
                 >
-                  <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>CANCEL REQUEST</Text>
+                  {isProcessingRequest ? (
+                    <ActivityIndicator color={Colors.danger} />
+                  ) : (
+                    <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>CANCEL REQUEST</Text>
+                  )}
                 </TouchableOpacity>
               )
             ) : (

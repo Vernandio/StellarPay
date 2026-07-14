@@ -17,7 +17,7 @@ export interface PaymentRequest {
   /** USD amount requested */
   amountUSD: string;
   message: string;
-  status: "pending" | "paid" | "declined";
+  status: "pending" | "paid" | "declined" | "canceled";
   requestedCurrency?: string; // Optional local display currency (e.g. "IDR")
   requestedAmount?: string;   // Optional local display amount (e.g. "90000")
   createdAt: Timestamp;
@@ -28,6 +28,8 @@ export interface PaymentRequest {
   tipsAmount?: string;
   discountAmount?: string;
   subtotalAmount?: string;
+  onChainBillId?: number;     // Link to on-chain Soroban escrow session ID
+  contractTxHash?: string;    // Transaction hash of the contract deployment
 }
 
 /**
@@ -50,17 +52,18 @@ export const createPaymentRequest = async (
 };
 
 /**
- * Update a payment request status (e.g. paid or declined).
+ * Update a payment request status (e.g. paid, declined, or canceled).
  */
 export const updatePaymentRequest = async (
   requestId: string,
-  update: { status: "paid" | "declined"; txHash?: string }
+  update: { status: "paid" | "declined" | "canceled"; txHash?: string }
 ) => {
   await updateDoc(doc(db, "requests", requestId), update);
 };
 
 /**
- * Subscribe to pending requests where the current user needs to pay.
+ * Subscribe to pending requests where the current user needs to pay (incoming requests).
+ * Sorted by recency and filtered by status in-memory to be index-free, limited to 3 items.
  */
 export const subscribeToPendingRequests = (
   uid: string,
@@ -68,19 +71,23 @@ export const subscribeToPendingRequests = (
 ) => {
   const q = query(
     collection(db, "requests"),
-    and(
-      where("status", "==", "pending"),
-      or(
-        where("receiverUid", "==", uid),
-        where("senderUid", "==", uid)
-      )
-    ),
-    orderBy("createdAt", "desc"),
-    limit(20)
+    where("receiverUid", "==", uid)
   );
 
   return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => d.data() as PaymentRequest));
+    const pending = snap.docs
+      .map((d) => d.data() as PaymentRequest)
+      .filter((r) => r.status === "pending");
+
+    pending.sort((a, b) => {
+      const timeA = a.createdAt?.seconds || Date.now() / 1000;
+      const timeB = b.createdAt?.seconds || Date.now() / 1000;
+      return timeB - timeA;
+    });
+
+    callback(pending.slice(0, 3));
+  }, (err) => {
+    console.error("subscribeToPendingRequests error:", err);
   });
 };
 
@@ -90,32 +97,61 @@ export const subscribeToPendingRequests = (
 export const getSentRequests = async (senderUid: string): Promise<PaymentRequest[]> => {
   const q = query(
     collection(db, "requests"),
-    where("senderUid", "==", senderUid),
-    orderBy("createdAt", "desc"),
-    limit(20)
+    where("senderUid", "==", senderUid)
   );
   const snap = await getDocs(q);
-  return snap.docs.map((d) => d.data() as PaymentRequest);
+  const list = snap.docs.map((d) => d.data() as PaymentRequest);
+  list.sort((a, b) => {
+    const timeA = a.createdAt?.seconds || Date.now() / 1000;
+    const timeB = b.createdAt?.seconds || Date.now() / 1000;
+    return timeB - timeA;
+  });
+  return list.slice(0, 20);
 };
 
-/**
- * Subscribe to all payment requests involving the user (sent or received).
- */
 export const subscribeToAllUserRequests = (
   uid: string,
   callback: (requests: PaymentRequest[]) => void
 ) => {
-  const q = query(
+  const qSent = query(
     collection(db, "requests"),
-    or(
-      where("senderUid", "==", uid),
-      where("receiverUid", "==", uid)
-    ),
-    orderBy("createdAt", "desc"),
-    limit(50)
+    where("senderUid", "==", uid)
   );
 
-  return onSnapshot(q, (snap) => {
-    callback(snap.docs.map((d) => d.data() as PaymentRequest));
+  const qReceived = query(
+    collection(db, "requests"),
+    where("receiverUid", "==", uid)
+  );
+
+  let sentList: PaymentRequest[] = [];
+  let receivedList: PaymentRequest[] = [];
+
+  const mergeAndCallback = () => {
+    const combined = [...sentList, ...receivedList];
+    combined.sort((a, b) => {
+      const timeA = a.createdAt?.seconds || Date.now() / 1000;
+      const timeB = b.createdAt?.seconds || Date.now() / 1000;
+      return timeB - timeA;
+    });
+    callback(combined.slice(0, 50));
+  };
+
+  const unsubSent = onSnapshot(qSent, (snap) => {
+    sentList = snap.docs.map((d) => d.data() as PaymentRequest);
+    mergeAndCallback();
+  }, (err) => {
+    console.error("subscribeToAllUserRequests sent query error:", err);
   });
+
+  const unsubReceived = onSnapshot(qReceived, (snap) => {
+    receivedList = snap.docs.map((d) => d.data() as PaymentRequest);
+    mergeAndCallback();
+  }, (err) => {
+    console.error("subscribeToAllUserRequests received query error:", err);
+  });
+
+  return () => {
+    unsubSent();
+    unsubReceived();
+  };
 };
