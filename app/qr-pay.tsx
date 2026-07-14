@@ -9,6 +9,8 @@ import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { parseEMVCoQR, EMVCoQRData } from "../src/utils/emvco";
 import { useWallet } from "../src/hooks/useWallet";
+import { formatInputAmount } from "../src/utils/format";
+
 import { useAuthStore } from "../src/store/authStore";
 import { fetchExchangeRates, ExchangeRates, convertToUSD } from "../src/services/exchangeRates";
 import { PinVerifySheet, PinVerifySheetRef } from "../src/components/PinVerifySheet";
@@ -73,7 +75,7 @@ export default function QRPayScreen() {
   }, [qrData]);
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
+    const cleaned = text.replace(/,/g, "").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
     setLocalAmount(cleaned);
   };
@@ -195,7 +197,7 @@ export default function QRPayScreen() {
             <View style={{ backgroundColor: Colors.white, borderRadius: 24, padding: Spacing.xl, alignItems: "center", marginTop: Spacing.md, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 12, elevation: 3 }}>
               
               <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: Spacing.xs }]}>
-                Pembayaran QR Ke
+                QR Payment To
               </Text>
               
               <Text style={[Typography.headingLarge, { color: Colors.textLightPrimary, fontWeight: "700", fontSize: 24, textAlign: "center" }]}>
@@ -218,14 +220,14 @@ export default function QRPayScreen() {
                 </View>
 
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Pengakuisisi</Text>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Acquirer</Text>
                   <Text style={[Typography.labelLarge, { color: Colors.primary, fontWeight: "700" }]}>
                     {qrData.acquirerName}
                   </Text>
                 </View>
 
                 <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>No. Transaksi</Text>
+                  <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Transaction No.</Text>
                   <Text style={[Typography.bodyMedium, { color: Colors.textLightPrimary, fontWeight: "500" }]}>
                     {qrData.transactionId}
                   </Text>
@@ -236,7 +238,7 @@ export default function QRPayScreen() {
 
               {/* Input Amount Section */}
               <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: Spacing.sm }]}>
-                Input Nominal ({qrData.currencyCode})
+                Enter Amount ({qrData.currencyCode})
               </Text>
 
               {qrData.amount ? (
@@ -252,7 +254,7 @@ export default function QRPayScreen() {
                   </Text>
                   <TextInput
                     ref={amountInputRef}
-                    value={localAmount}
+                    value={formatInputAmount(localAmount)}
                     onChangeText={handleAmountChange}
                     keyboardType="decimal-pad"
                     placeholder="0.00"
@@ -268,13 +270,13 @@ export default function QRPayScreen() {
             {/* Funding Source Card */}
             <View style={{ backgroundColor: Colors.white, borderRadius: 16, padding: Spacing.lg, marginTop: Spacing.lg, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.03, shadowRadius: 8, elevation: 2 }}>
               <Text style={[Typography.labelSmall, { color: Colors.textLightSecondary, textTransform: "uppercase", letterSpacing: 1, marginBottom: Spacing.sm }]}>
-                Pilih Sumber Dana
+                Select Funding Source
               </Text>
               
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <View>
                   <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "700" }]}>
-                    Dari Rekening:
+                    From Account:
                   </Text>
                   <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary, marginTop: 2 }]}>
                     US Dollar Balance

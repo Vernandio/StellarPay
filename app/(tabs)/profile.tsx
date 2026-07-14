@@ -34,6 +34,12 @@ export default function ProfileScreen() {
   const [isBiometricsEnabled, setIsBiometricsEnabled] = useState(false);
 
   useEffect(() => {
+    if (profile?.avatarUrl) {
+      setAvatarUrl(profile.avatarUrl);
+    }
+  }, [profile?.avatarUrl]);
+
+  useEffect(() => {
     AsyncStorage.getItem("biometrics_enabled").then((val) => {
       setIsBiometricsEnabled(val === "true");
     });

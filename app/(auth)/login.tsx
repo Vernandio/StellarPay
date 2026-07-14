@@ -33,6 +33,9 @@ import {
 import { verifyPin, setupPin } from "../../src/services/api/pin";
 import { getUserProfile } from "../../src/services/firebase/firestore";
 import { apiClient } from "../../src/services/api/client";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
+import * as LocalAuthentication from 'expo-local-authentication';
 import {
   GoogleSignInButton,
   OrDivider,
@@ -106,7 +109,10 @@ function PinRow({
       </Text>
 
       <Pressable
-        onPress={() => inputRef.current?.focus()}
+        onPress={() => {
+          inputRef.current?.blur();
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
@@ -248,6 +254,41 @@ export default function LoginScreen() {
   // ─────────────────────────────────────────────────────────────────────
   // Step 2: Verify PIN
   // ─────────────────────────────────────────────────────────────────────
+  const handleBiometricAuth = async () => {
+    try {
+      const hasHardware = await LocalAuthentication.hasHardwareAsync();
+      const isEnrolled = await LocalAuthentication.isEnrolledAsync();
+      if (!hasHardware || !isEnrolled) return;
+
+      const savedPin = await SecureStore.getItemAsync("saved_pin");
+      if (!savedPin) return;
+
+      const result = await LocalAuthentication.authenticateAsync({
+        promptMessage: "Authenticate to unlock StellarPay",
+        fallbackLabel: "Use PIN",
+        disableDeviceFallback: true,
+      });
+
+      if (result.success) {
+        verifyPinCode(savedPin);
+      }
+    } catch (err) {
+      console.warn("Biometric login failed:", err);
+    }
+  };
+
+  useEffect(() => {
+    if (step === "pin") {
+      AsyncStorage.getItem("biometrics_enabled").then((val) => {
+        if (val === "true") {
+          setTimeout(() => {
+            handleBiometricAuth();
+          }, 500);
+        }
+      });
+    }
+  }, [step]);
+
   const verifyPinCode = async (code: string) => {
     setIsLoading(true);
     setError(null);

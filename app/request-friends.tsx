@@ -46,13 +46,14 @@ export default function RequestFriendsScreen() {
       setSearchLoading(true);
       try {
         const found = await searchUser(debouncedSearch);
-        if (found) {
+        if (found && found.uid !== profile?.uid) {
           setSearchResults([
             {
               id: found.uid,
               name: found.displayName || found.username,
               handle: `@${found.username}`,
               avatar: (found.displayName || found.username).charAt(0).toUpperCase(),
+              avatarUrl: found.avatarUrl || null,
               color: "#7B61FF",
             },
           ]);

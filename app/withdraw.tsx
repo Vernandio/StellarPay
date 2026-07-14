@@ -9,6 +9,8 @@ import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES } from "../src/constants/currencies";
+import { formatInputAmount } from "../src/utils/format";
+
 
 export default function WithdrawScreen() {
   const [amount, setAmount] = useState("");
@@ -38,7 +40,7 @@ export default function WithdrawScreen() {
 
   const handleAmountChange = (text: string) => {
     // Only allow numbers and one decimal point ("," locale decimal key → ".")
-    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, "");
+    const cleaned = text.replace(/,/g, "").replace(/[^0-9.]/g, "");
     if (cleaned.split(".").length > 2) return;
     setAmount(cleaned);
   };
@@ -90,7 +92,7 @@ export default function WithdrawScreen() {
               <Text style={[Typography.displayLarge, { fontSize: 64, lineHeight: 76, color: amount ? Colors.textLightPrimary : Colors.textLightSecondary }]}>{currency.symbol}</Text>
               <TextInput
                 ref={inputRef}
-                value={amount}
+                value={formatInputAmount(amount)}
                 onChangeText={handleAmountChange}
                 keyboardType="decimal-pad"
                 placeholder="0"

@@ -9,6 +9,8 @@ import * as FileSystem from "expo-file-system/legacy";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
+import { showToast } from "../src/store/toastStore";
+
 import { searchUser, getSuggestedFriends } from "../src/services/firebase/firestore";
 import { useAuthStore } from "../src/store/authStore";
 import { Friend } from "../src/types";
@@ -21,7 +23,9 @@ type Step = "select_friends" | "choose_method" | "review_bill" | "split_nominals
 interface BillItem {
   name: string;
   price: number;
+  priceStr?: string;
   qty: number;
+  qtyStr?: string;
 }
 
 const SUPPORTED_CURRENCIES = [
@@ -50,12 +54,16 @@ export default function SplitBillScreen() {
   // Step 3: Bill Items States
   const [currency, setCurrency] = useState<string>("USD");
   const [items, setItems] = useState<BillItem[]>([
-    { name: "", price: 0, qty: 1 },
+    { name: "", price: 0, priceStr: "", qty: 1, qtyStr: "1" },
   ]);
   const [tax, setTax] = useState<number>(0);
+  const [taxStr, setTaxStr] = useState<string>("");
   const [service, setService] = useState<number>(0);
+  const [serviceStr, setServiceStr] = useState<string>("");
   const [tips, setTips] = useState<number>(0);
+  const [tipsStr, setTipsStr] = useState<string>("");
   const [discount, setDiscount] = useState<number>(0);
+  const [discountStr, setDiscountStr] = useState<string>("");
   const [showFeesAndTaxDetails, setShowFeesAndTaxDetails] = useState<boolean>(false);
   const [showCurrencyDropdown, setShowCurrencyDropdown] = useState(false);
 
@@ -418,8 +426,23 @@ export default function SplitBillScreen() {
       }
 
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert("Split Sent!", "Split bill requests sent successfully to your friends.");
-      router.replace("/(tabs)");
+      
+      let totalRequested = 0;
+      for (const friend of selectedFriends) {
+        if (splits[friend.id] > 0) totalRequested += splits[friend.id];
+      }
+      
+      const totalAmountStr = new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: currency === "VND" || currency === "IDR" ? 0 : 2,
+        maximumFractionDigits: currency === "VND" || currency === "IDR" ? 0 : 2,
+      }).format(totalRequested);
+      
+      const nameStr = selectedFriends.length === 1 
+        ? selectedFriends[0].name 
+        : `${selectedFriends[0].name} & ${selectedFriends.length - 1} others`;
+
+      showToast(`Requested ${currency} ${totalAmountStr} from ${nameStr}`, "success");
+      router.back();
     } catch (err: any) {
       console.error("Confirm split failed:", err);
       Alert.alert("Error", err.message || "Failed to submit split bill.");
@@ -740,9 +763,10 @@ export default function SplitBillScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: 2 }]}>Qty</Text>
                         <TextInput
-                          value={item.qty.toString()}
+                          value={item.qtyStr ?? item.qty.toString()}
                           onChangeText={(text) => {
                             const updated = [...items];
+                            updated[idx].qtyStr = text;
                             updated[idx].qty = parseInt(text.replace(/\D/g, "")) || 0;
                             setItems(updated);
                           }}
@@ -755,11 +779,12 @@ export default function SplitBillScreen() {
                       <View style={{ flex: 2 }}>
                         <Text style={[Typography.bodySmall, { color: Colors.textLightSecondary, marginBottom: 2 }]}>Price per Unit</Text>
                         <TextInput
-                          value={item.price === 0 ? "" : item.price.toString()}
+                          value={item.priceStr ?? (item.price === 0 ? "" : item.price.toString())}
                           onChangeText={(text) => {
                             const updated = [...items];
                             // Parse float safely
                             const cleanText = text.replace(/[^0-9.]/g, "");
+                            updated[idx].priceStr = text;
                             updated[idx].price = parseFloat(cleanText) || 0;
                             setItems(updated);
                           }}
@@ -817,9 +842,10 @@ export default function SplitBillScreen() {
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: Spacing.md, marginBottom: Spacing.md }}>
                         <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Tax (+)</Text>
                         <TextInput
-                          value={tax === 0 ? "" : tax.toString()}
+                          value={taxStr ?? (tax === 0 ? "" : tax.toString())}
                           onChangeText={(text) => {
                             const cleanText = text.replace(/[^0-9.]/g, "");
+                            setTaxStr(text);
                             setTax(parseFloat(cleanText) || 0);
                           }}
                           keyboardType="decimal-pad"
@@ -832,9 +858,10 @@ export default function SplitBillScreen() {
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                         <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Service Charge (+)</Text>
                         <TextInput
-                          value={service === 0 ? "" : service.toString()}
+                          value={serviceStr ?? (service === 0 ? "" : service.toString())}
                           onChangeText={(text) => {
                             const cleanText = text.replace(/[^0-9.]/g, "");
+                            setServiceStr(text);
                             setService(parseFloat(cleanText) || 0);
                           }}
                           keyboardType="decimal-pad"
@@ -847,9 +874,10 @@ export default function SplitBillScreen() {
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                         <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Tips (+)</Text>
                         <TextInput
-                          value={tips === 0 ? "" : tips.toString()}
+                          value={tipsStr ?? (tips === 0 ? "" : tips.toString())}
                           onChangeText={(text) => {
                             const cleanText = text.replace(/[^0-9.]/g, "");
+                            setTipsStr(text);
                             setTips(parseFloat(cleanText) || 0);
                           }}
                           keyboardType="decimal-pad"
@@ -862,9 +890,10 @@ export default function SplitBillScreen() {
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                         <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Discount (-)</Text>
                         <TextInput
-                          value={discount === 0 ? "" : discount.toString()}
+                          value={discountStr ?? (discount === 0 ? "" : discount.toString())}
                           onChangeText={(text) => {
                             const cleanText = text.replace(/[^0-9.]/g, "");
+                            setDiscountStr(text);
                             setDiscount(parseFloat(cleanText) || 0);
                           }}
                           keyboardType="decimal-pad"

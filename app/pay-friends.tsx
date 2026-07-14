@@ -76,6 +76,7 @@ export default function PayFriendsScreen() {
         name: profile.displayName,
         handle: `@${profile.username}`,
         avatar: profile.displayName.substring(0, 1).toUpperCase(),
+        avatarUrl: profile.avatarUrl || null,
         color: "#4ECDC4",
         publicKey: profile.stellarPublicKey || "",
       },

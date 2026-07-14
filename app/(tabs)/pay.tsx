@@ -13,6 +13,8 @@ import { useAuthStore } from "../../src/store/authStore";
 import { showToast } from "../../src/store/toastStore";
 import { CURRENCIES, Currency } from "../../src/constants/currencies";
 import QRCode from "react-native-qrcode-svg";
+import { formatInputAmount } from "../../src/utils/format";
+
 import { fetchExchangeRates, ExchangeRates } from "../../src/services/exchangeRates";
 import { createPaymentRequest } from "../../src/services/firebase/requests";
 import { useWallet } from "../../src/hooks/useWallet";
@@ -172,7 +174,7 @@ export default function PayScreen() {
       }
       await MediaLibrary.saveToLibraryAsync(uri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Saved!', 'QR code saved to your photo library.');
+      showToast("QR code saved to your photo library.", "success");
     } catch (err) {
       console.warn('Save QR failed:', err);
     }
@@ -520,6 +522,8 @@ export default function PayScreen() {
         backgroundStyle={{ backgroundColor: Colors.white, borderRadius: 24 }}
         handleIndicatorStyle={{ backgroundColor: Colors.border, width: 40 }}
         enablePanDownToClose={true}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
       >
         <BottomSheetView style={{ paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xxl, alignItems: "center" }}>
           {!qrGenerated ? (
@@ -530,8 +534,8 @@ export default function PayScreen() {
               {/* Amount and Currency Selector Row */}
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginVertical: Spacing.lg, width: "100%" }}>
                 <BottomSheetTextInput
-                  value={requestAmount}
-                  onChangeText={(text) => setRequestAmount(text.replace(/,/g, ".").replace(/[^0-9.]/g, ""))}
+                  value={formatInputAmount(requestAmount)}
+                  onChangeText={(text) => setRequestAmount(text.replace(/,/g, "").replace(/[^0-9.]/g, ""))}
                   placeholder="0.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={Colors.textLightMuted}

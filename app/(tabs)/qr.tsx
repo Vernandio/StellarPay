@@ -165,7 +165,7 @@ export default function QRScreen() {
       }
       await MediaLibrary.saveToLibraryAsync(uri);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      Alert.alert('Saved!', 'QR code saved to your photo library.');
+      showToast("QR code saved to your photo library.", "success");
     } catch (err) {
       console.warn('Save QR failed:', err);
     }

@@ -9,6 +9,8 @@ import { ActivityIndicator, Alert } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
 import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
+import { formatInputAmount } from "../src/utils/format";
+
 import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES, Currency } from "../src/constants/currencies";
 import { useStellar } from "../src/hooks/useStellar";
@@ -64,7 +66,7 @@ export default function SendScreen() {
   }, [params.amount]);
 
   const handleAmountChange = (text: string) => {
-    let cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // treat "," (locale decimal key) as "."
+    let cleaned = text.replace(/,/g, "").replace(/[^0-9.]/g, ""); // treat "," (locale decimal key) as "."
     if (cleaned.split(".").length > 2) return; // reject a second decimal point
     cleaned = cleaned.replace(/^0+(?=\d)/, ""); // drop leading zeros ("05" → "5", keep "0.5")
     setAmount(cleaned);
@@ -292,7 +294,7 @@ export default function SendScreen() {
               >
                 <TextInput
                   ref={amountInputRef}
-                  value={amount}
+                  value={formatInputAmount(amount)}
                   onChangeText={handleAmountChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"

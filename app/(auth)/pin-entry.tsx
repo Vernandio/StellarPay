@@ -85,7 +85,10 @@ function PinRow({
       </Text>
 
       <Pressable
-        onPress={() => inputRef.current?.focus()}
+        onPress={() => {
+          inputRef.current?.blur();
+          setTimeout(() => inputRef.current?.focus(), 50);
+        }}
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
@@ -210,8 +213,9 @@ export default function PinEntryScreen() {
       if (!savedPin) return;
 
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: "Sign in to StellarPay",
+        promptMessage: "Authenticate to access StellarPay",
         fallbackLabel: "Use PIN",
+        disableDeviceFallback: true,
       });
 
       if (result.success) {
@@ -223,18 +227,16 @@ export default function PinEntryScreen() {
   };
 
   useEffect(() => {
-    if (!profileLoading && profile) {
-      AsyncStorage.getItem("biometrics_enabled").then((val) => {
-        if (val === "true") {
-          setBiometricsEnabled(true);
-          // Wait briefly for UI transitions to settle before showing native prompt
-          setTimeout(() => {
-            handleBiometricAuth();
-          }, 500);
-        }
-      });
-    }
-  }, [profileLoading, profile]);
+    AsyncStorage.getItem("biometrics_enabled").then((val) => {
+      if (val === "true") {
+        setBiometricsEnabled(true);
+        // Wait briefly for UI transitions to settle before showing native prompt
+        setTimeout(() => {
+          handleBiometricAuth();
+        }, 500);
+      }
+    });
+  }, []);
 
   const verifyCode = async (enteredPin: string) => {
     setIsLoading(true);

@@ -201,7 +201,15 @@ export const getSuggestedFriends = async (uid: string): Promise<Friend[]> => {
     // Skip open requests, self, and system/synthetic accounts used
     // for Add Money / Withdraw / merchant QR transfers — they're not real people.
     const SYSTEM_ACCOUNTS = ["anchor", "localmerchant", "anchorwallet"];
-    if (!username || counterpartyUid === uid || SYSTEM_ACCOUNTS.includes(counterpartyUid) || SYSTEM_ACCOUNTS.includes(username.toLowerCase())) return;
+    if (
+      !username ||
+      counterpartyUid === uid ||
+      counterpartyUid.startsWith("merchant_") ||
+      SYSTEM_ACCOUNTS.includes(counterpartyUid) ||
+      SYSTEM_ACCOUNTS.includes(username.toLowerCase())
+    ) {
+      return;
+    }
     const key = username.toLowerCase();
     const name = displayName?.trim() || username;
     const existing = byUsername.get(key);

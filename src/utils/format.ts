@@ -16,6 +16,14 @@ export const formatAmount = (
   }).format(num);
 };
 
+// Format input amount to include commas while user types
+export const formatInputAmount = (val: string): string => {
+  if (!val) return "";
+  const parts = val.split(".");
+  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return parts.join(".");
+};
+
 // Truncate Stellar public key for display — NEVER show full key in UI
 export const truncateAddress = (address: string, chars = 4): string => {
   if (!address || address.length < chars * 2 + 3) return address;

@@ -9,6 +9,10 @@ import { Colors } from "../src/constants/colors";
 import { Typography } from "../src/constants/typography";
 import { Spacing } from "../src/constants/spacing";
 import { CURRENCIES } from "../src/constants/currencies";
+import { showToast } from "../src/store/toastStore";
+
+import { formatInputAmount } from "../src/utils/format";
+
 import { useAuthStore } from "../src/store/authStore";
 import { getUserByUsername } from "../src/services/firebase/firestore";
 import { createPaymentRequest } from "../src/services/firebase/requests";
@@ -63,7 +67,7 @@ export default function RequestScreen() {
   }, []);
 
   const handleAmountChange = (text: string) => {
-    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
+    const cleaned = text.replace(/,/g, "").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
     setAmount(cleaned);
 
@@ -82,7 +86,7 @@ export default function RequestScreen() {
   };
 
   const handleIndividualAmountChange = (id: string, text: string) => {
-    const cleaned = text.replace(/,/g, ".").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
+    const cleaned = text.replace(/,/g, "").replace(/[^0-9.]/g, ""); // "," locale decimal key → "."
     if (cleaned.split(".").length > 2) return;
 
     setGroupAmounts((prev) => {
@@ -150,8 +154,12 @@ export default function RequestScreen() {
         }
 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("Split Sent!", "Your split bill requests have been sent.");
-        router.navigate("/(tabs)/pay");
+        const totalAmountStr = new Intl.NumberFormat("en-US", {
+          minimumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+          maximumFractionDigits: currency.code === "VND" || currency.code === "IDR" ? 0 : 2,
+        }).format(parseFloat(amount));
+        showToast(`Requested ${currency.code} ${totalAmountStr} from ${parsedGroup[0].name} & ${parsedGroup.length - 1} others`, "success");
+        router.back();
       } else {
         // Look up recipient
         const recipientUsername = (params.handle as string)?.replace("@", "") || "";
@@ -207,7 +215,7 @@ export default function RequestScreen() {
         });
 
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        Alert.alert("Request Sent!", `Your request for ${displayRequestStr} has been sent.`);
+        showToast(`Requested ${currency.code} ${formattedAmount} from ${recipient.displayName || recipient.username}`, "success");
         router.back();
       }
     } catch (err: any) {
@@ -325,7 +333,7 @@ export default function RequestScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: Spacing.xl }}>
                 <TextInput
                   ref={amountInputRef}
-                  value={amount}
+                  value={formatInputAmount(amount)}
                   onChangeText={handleAmountChange}
                   keyboardType="decimal-pad"
                   placeholder="0.00"
