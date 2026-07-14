@@ -19,7 +19,6 @@ import { createPaymentRequest } from "../src/services/firebase/requests";
 import { createNotification } from "../src/services/firebase/notifications";
 import { createOnChainBill } from "../src/services/stellar/contracts";
 import { SPLIT_BILL_CONTRACT_ID } from "../src/constants/contracts";
-import { USDC_ASSET } from "../src/constants/stellar";
 
 type Step = "select_friends" | "choose_method" | "review_bill" | "split_nominals";
 
@@ -37,6 +36,17 @@ const SUPPORTED_CURRENCIES = [
   { code: "PHP", symbol: "₱", flag: "🇵🇭" },
   { code: "SGD", symbol: "S$", flag: "🇸🇬" },
 ];
+
+// Mock testnet FX rates: units of local currency per 1 USD
+const MOCK_USD_RATES: Record<string, number> = {
+  USD: 1,
+  IDR: 15000,
+  PHP: 56,
+  SGD: 1.35,
+};
+
+const convertToUSD = (amount: number, currency: string) =>
+  amount / (MOCK_USD_RATES[currency] || 1);
 
 export default function SplitBillScreen() {
   const { profile } = useAuthStore();
@@ -380,52 +390,60 @@ export default function SplitBillScreen() {
       let onChainBillId: number | undefined = undefined;
       let contractTxHash: string | undefined = undefined;
 
-      // Check if Soroban Contract ID is set, if so execute on-chain escrow path
+      // Escrow expires 7 days from now (in seconds)
+      const deadlineSec = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
+
+      // Check if Soroban Contract ID is set, if so execute on-chain escrow path.
+      // Any failure here falls back to standard off-chain requests so the
+      // split itself never fails because of the escrow.
       if (SPLIT_BILL_CONTRACT_ID) {
-        showToast("Resolving participants' Stellar accounts...", "info");
-        
-        const participantKeys: string[] = [];
-        const participantAmounts: number[] = [];
+        try {
+          showToast("Resolving participants' Stellar accounts...", "info");
 
-        for (const friend of selectedFriends) {
-          const amount = splits[friend.id] || 0;
-          if (amount <= 0) continue;
+          const participantKeys: string[] = [];
+          const participantAmounts: number[] = [];
 
-          // Lookup friend profile to get their public key
-          const username = friend.handle.replace("@", "");
-          const friendProfile = await getUserByUsername(username);
+          for (const friend of selectedFriends) {
+            const amount = splits[friend.id] || 0;
+            if (amount <= 0) continue;
 
-          if (!friendProfile || !friendProfile.stellarPublicKey) {
-            throw new Error(`User @${username} does not have a Stellar address setup yet.`);
+            // Lookup friend profile to get their public key
+            const username = friend.handle.replace("@", "");
+            const friendProfile = await getUserByUsername(username);
+
+            if (!friendProfile || !friendProfile.stellarPublicKey) {
+              throw new Error(`User @${username} does not have a Stellar address setup yet.`);
+            }
+
+            participantKeys.push(friendProfile.stellarPublicKey);
+
+            // Round to cents first so the escrowed amount matches the USD
+            // amount stored in Firestore, then scale to USDC's 7 decimals.
+            const requestedUSD = convertToUSD(amount, currency);
+            participantAmounts.push(Math.round(requestedUSD * 100) * 100_000);
           }
 
-          participantKeys.push(friendProfile.stellarPublicKey);
-          
-          // USDC has 7 decimals on Stellar (1 USDC = 10,000,000 stroops/units)
-          const requestedUSD = currency === "USD" ? amount : amount / 15000;
-          participantAmounts.push(Math.round(requestedUSD * 10_000_000));
-        }
+          if (participantKeys.length > 0) {
+            if (!profile?.uid || !profile?.stellarPublicKey) {
+              throw new Error("Your wallet is not configured for Stellar transactions.");
+            }
 
-        if (participantKeys.length > 0) {
-          if (!profile?.uid || !profile?.stellarPublicKey) {
-            throw new Error("Your wallet is not configured for Stellar transactions.");
+            showToast("Creating on-chain escrow...", "info");
+
+            const result = await createOnChainBill(
+              profile.uid,
+              profile.stellarPublicKey,
+              participantKeys,
+              participantAmounts,
+              deadlineSec
+            );
+
+            onChainBillId = result.billId;
+            contractTxHash = result.txHash;
           }
-
-          showToast("Deploying on-chain escrow contract...", "info");
-
-          // Set deadline to 7 days from now (in seconds)
-          const deadlineSec = Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60);
-
-          const result = await createOnChainBill(
-            profile.uid,
-            profile.stellarPublicKey,
-            participantKeys,
-            participantAmounts,
-            deadlineSec
-          );
-
-          onChainBillId = result.billId;
-          contractTxHash = result.txHash;
+        } catch (chainErr: any) {
+          console.warn("On-chain escrow creation failed, falling back to standard requests:", chainErr);
+          showToast("Escrow unavailable — sending standard requests instead.", "warning");
         }
       }
 
@@ -450,8 +468,7 @@ export default function SplitBillScreen() {
         });
 
         // Save requested amount in USD (all Firestore transactions base on USD)
-        // Convert to USD value if non-USD selected
-        const requestedUSD = currency === "USD" ? amount : amount / 15000; // Mock 15k rate fallback for non-USD splits
+        const requestedUSD = convertToUSD(amount, currency);
         const friendBreakdown = breakdowns[friend.id];
 
         const requestId = await createPaymentRequest({
@@ -472,6 +489,7 @@ export default function SplitBillScreen() {
           subtotalAmount: friendBreakdown?.subtotal.toFixed(2),
           onChainBillId,
           contractTxHash,
+          escrowDeadline: onChainBillId ? deadlineSec : undefined,
         });
 
         await createNotification({

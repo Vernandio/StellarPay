@@ -260,12 +260,12 @@ impl SplitBillManager {
             current_time > session.deadline,
             "deadline has not passed yet"
         );
+        // Pending bills become Expired on first refund; further participants
+        // must still be able to refund from the already-Expired bill.
         assert!(
-            session.status == BillStatus::Pending,
-            "bill is not in pending status (already completed or expired)"
+            session.status != BillStatus::Completed,
+            "bill is completed — funds belong to the organizer"
         );
-
-        // Mark as expired on first refund
         session.status = BillStatus::Expired;
 
         // Find the participant and check they paid

@@ -19,6 +19,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
 import { loadKeypairFromSecureStore } from "./wallet";
+import { loadAccount } from "./client";
 import { ACTIVE_NETWORK, BASE_FEE } from "../../constants/stellar";
 import { SPLIT_BILL_CONTRACT_ID, USDC_TOKEN_CONTRACT_ID } from "../../constants/contracts";
 
@@ -26,16 +27,74 @@ import { SPLIT_BILL_CONTRACT_ID, USDC_TOKEN_CONTRACT_ID } from "../../constants/
 const SOROBAN_RPC_URL = "https://soroban-testnet.stellar.org:443";
 
 /**
- * Get a SorobanRpc.Server instance for preparing/simulating transactions.
+ * Simulate a transaction via raw fetch.
+ *
+ * WHY not rpc.Server.simulateTransaction()/getAccount(): under Hermes the
+ * SDK's request pipeline corrupts the base64-encoded XDR it sends (same
+ * issue as payments.ts) — getAccount() then reports existing accounts as
+ * "Account not found". Accounts are loaded from Horizon (plain GET) and
+ * simulation goes through fetch with Buffer-built base64.
+ *
+ * @returns the raw simulation response, consumable by rpc.assembleTransaction
  */
-const getRpcServer = () => new rpc.Server(SOROBAN_RPC_URL);
+const simulateSorobanTx = async (tx: any): Promise<any> => {
+  const xdrBase64 = Buffer.from(tx.toEnvelope().toXDR()).toString("base64");
+
+  const response = await fetch(SOROBAN_RPC_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "simulateTransaction",
+      params: { transaction: xdrBase64 },
+    }),
+  });
+
+  const data = await response.json();
+
+  if (data.error) {
+    throw new Error(`Simulation RPC error: ${JSON.stringify(data.error)}`);
+  }
+  if (data.result.error) {
+    throw new Error(`Simulation failed: ${data.result.error}`);
+  }
+
+  return data.result;
+};
+
+/**
+ * Extract the Soroban host-function return value from a transaction's
+ * result meta XDR.
+ *
+ * WHY meta and not resultXdr: InvokeHostFunctionResult.success() only
+ * carries the SHA-256 *hash* of the return value — the actual ScVal
+ * lives in TransactionMeta.sorobanMeta().returnValue().
+ */
+const parseReturnValue = (resultMetaXdr: string): xdr.ScVal | null => {
+  try {
+    const meta = xdr.TransactionMeta.fromXDR(resultMetaXdr, "base64");
+    switch (meta.switch()) {
+      case 3:
+        return meta.v3().sorobanMeta()?.returnValue() ?? null;
+      case 4:
+        // Protocol 23+ meta format
+        return (meta as any).v4().sorobanMeta()?.returnValue() ?? null;
+      default:
+        return null;
+    }
+  } catch (err) {
+    console.warn("Could not parse Soroban return value from meta XDR:", err);
+    return null;
+  }
+};
 
 /**
  * Submit a signed Soroban transaction via raw fetch to bypass Hermes issues.
  */
 const submitSorobanTx = async (
   signedTx: any
-): Promise<{ hash: string; resultXdr: string }> => {
+): Promise<{ hash: string; returnValue: xdr.ScVal | null }> => {
   const xdrBase64 = Buffer.from(signedTx.toEnvelope().toXDR()).toString("base64");
 
   const response = await fetch(SOROBAN_RPC_URL, {
@@ -55,13 +114,23 @@ const submitSorobanTx = async (
     throw new Error(`Soroban RPC error: ${JSON.stringify(data.error)}`);
   }
 
+  if (data.result.status === "ERROR") {
+    throw new Error(
+      `Transaction rejected by network: ${data.result.errorResultXdr || JSON.stringify(data.result)}`
+    );
+  }
+
   // Poll for transaction status until confirmed
   const txHash = data.result.hash;
   let status = data.result.status;
-  let resultXdr = "";
+  let returnValue: xdr.ScVal | null = null;
 
-  // If not immediately confirmed, poll
-  while (status === "PENDING" || status === "NOT_FOUND") {
+  // If not immediately confirmed, poll (max ~60s)
+  let attempts = 0;
+  while (status === "PENDING" || status === "NOT_FOUND" || status === "TRY_AGAIN_LATER") {
+    if (++attempts > 30) {
+      throw new Error(`Transaction confirmation timed out (hash: ${txHash})`);
+    }
     await new Promise((r) => setTimeout(r, 2000));
 
     const pollResp = await fetch(SOROBAN_RPC_URL, {
@@ -79,7 +148,9 @@ const submitSorobanTx = async (
     status = pollData.result.status;
 
     if (status === "SUCCESS") {
-      resultXdr = pollData.result.resultXdr || "";
+      if (pollData.result.resultMetaXdr) {
+        returnValue = parseReturnValue(pollData.result.resultMetaXdr);
+      }
       break;
     } else if (status === "FAILED") {
       throw new Error(
@@ -88,7 +159,7 @@ const submitSorobanTx = async (
     }
   }
 
-  return { hash: txHash, resultXdr };
+  return { hash: txHash, returnValue };
 };
 
 // ── Public API ───────────────────────────────────────────────────────
@@ -119,7 +190,6 @@ export const createOnChainBill = async (
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Stellar keypair not found in SecureStore");
 
-  const server = getRpcServer();
   const contract = new Contract(SPLIT_BILL_CONTRACT_ID);
 
   // Build Soroban-compatible ScVal arguments
@@ -141,7 +211,7 @@ export const createOnChainBill = async (
   const scDeadline = nativeToScVal(deadlineSec, { type: "u64" });
 
   // Fetch the source account from Horizon for sequence number
-  const sourceAccount = await server.getAccount(publicKey);
+  const sourceAccount = await loadAccount(publicKey);
 
   // Build the contract invocation transaction
   let tx = new TransactionBuilder(sourceAccount, {
@@ -162,47 +232,36 @@ export const createOnChainBill = async (
     .build();
 
   // Simulate to get the correct resource footprint and fees
-  const simResult = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(
-      `Simulation failed: ${(simResult as any).error || "unknown error"}`
-    );
-  }
+  const rawSim = await simulateSorobanTx(tx);
 
   // Assemble the transaction with the simulation results
-  const assembledTx = rpc.assembleTransaction(tx, simResult).build();
+  const assembledTx = rpc.assembleTransaction(tx, rawSim).build();
 
   // Sign
   assembledTx.sign(keypair);
 
   // Submit
-  const { hash, resultXdr } = await submitSorobanTx(assembledTx);
+  const { hash, returnValue } = await submitSorobanTx(assembledTx);
 
-  // Parse the returned bill_id from the result XDR
+  // Parse the returned bill_id — prefer the on-chain return value, fall
+  // back to the simulation's retval (same counter read pre-submission).
   let billId = 0;
   try {
-    if (resultXdr) {
-      const result = xdr.TransactionResult.fromXDR(resultXdr, "base64");
-      const opResults = result.result().results();
-      if (opResults && opResults.length > 0) {
-        const tr = opResults[0].tr();
-        if (tr) {
-          const invokeHostFnResult = tr.invokeHostFunctionResult();
-          if (invokeHostFnResult) {
-            const successBuffer = invokeHostFnResult.success();
-            if (successBuffer) {
-              const scVal = xdr.ScVal.fromXDR(successBuffer);
-              const nativeVal = scValToNative(scVal);
-              billId = typeof nativeVal === "bigint" ? Number(nativeVal) : Number(nativeVal || 0);
-              console.log("Parsed bill ID from transaction result:", billId);
-            }
-          }
-        }
-      }
+    const parsedSim: any = rpc.parseRawSimulation(rawSim);
+    const scVal = returnValue ?? parsedSim.result?.retval ?? null;
+    if (scVal) {
+      const nativeVal = scValToNative(scVal);
+      billId = Number(nativeVal || 0);
+      console.log("Parsed on-chain bill ID:", billId);
     }
   } catch (parseErr) {
-    console.warn("Could not parse bill ID from result XDR:", parseErr);
+    console.warn("Could not parse bill ID from return value:", parseErr);
+  }
+
+  if (!billId) {
+    throw new Error(
+      `Bill was created on-chain (tx ${hash}) but the bill ID could not be determined.`
+    );
   }
 
   return { billId, txHash: hash };
@@ -230,7 +289,6 @@ export const payOnChainShare = async (
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Stellar keypair not found in SecureStore");
 
-  const server = getRpcServer();
   const contract = new Contract(SPLIT_BILL_CONTRACT_ID);
 
   const scBillId = nativeToScVal(billId, { type: "u64" });
@@ -238,7 +296,7 @@ export const payOnChainShare = async (
     type: "address",
   });
 
-  const sourceAccount = await server.getAccount(publicKey);
+  const sourceAccount = await loadAccount(publicKey);
 
   let tx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
@@ -248,15 +306,8 @@ export const payOnChainShare = async (
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(
-      `Simulation failed: ${(simResult as any).error || "unknown error"}`
-    );
-  }
-
-  const assembledTx = rpc.assembleTransaction(tx, simResult).build();
+  const rawSim = await simulateSorobanTx(tx);
+  const assembledTx = rpc.assembleTransaction(tx, rawSim).build();
   assembledTx.sign(keypair);
 
   const { hash } = await submitSorobanTx(assembledTx);
@@ -283,12 +334,11 @@ export const claimOnChainFunds = async (
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Stellar keypair not found in SecureStore");
 
-  const server = getRpcServer();
   const contract = new Contract(SPLIT_BILL_CONTRACT_ID);
 
   const scBillId = nativeToScVal(billId, { type: "u64" });
 
-  const sourceAccount = await server.getAccount(publicKey);
+  const sourceAccount = await loadAccount(publicKey);
 
   let tx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
@@ -298,15 +348,8 @@ export const claimOnChainFunds = async (
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(
-      `Simulation failed: ${(simResult as any).error || "unknown error"}`
-    );
-  }
-
-  const assembledTx = rpc.assembleTransaction(tx, simResult).build();
+  const rawSim = await simulateSorobanTx(tx);
+  const assembledTx = rpc.assembleTransaction(tx, rawSim).build();
   assembledTx.sign(keypair);
 
   const { hash } = await submitSorobanTx(assembledTx);
@@ -333,7 +376,6 @@ export const refundOnChainShare = async (
   const keypair = await loadKeypairFromSecureStore(uid);
   if (!keypair) throw new Error("Stellar keypair not found in SecureStore");
 
-  const server = getRpcServer();
   const contract = new Contract(SPLIT_BILL_CONTRACT_ID);
 
   const scBillId = nativeToScVal(billId, { type: "u64" });
@@ -341,7 +383,7 @@ export const refundOnChainShare = async (
     type: "address",
   });
 
-  const sourceAccount = await server.getAccount(publicKey);
+  const sourceAccount = await loadAccount(publicKey);
 
   let tx = new TransactionBuilder(sourceAccount, {
     fee: BASE_FEE,
@@ -351,15 +393,8 @@ export const refundOnChainShare = async (
     .setTimeout(30)
     .build();
 
-  const simResult = await server.simulateTransaction(tx);
-
-  if (rpc.Api.isSimulationError(simResult)) {
-    throw new Error(
-      `Simulation failed: ${(simResult as any).error || "unknown error"}`
-    );
-  }
-
-  const assembledTx = rpc.assembleTransaction(tx, simResult).build();
+  const rawSim = await simulateSorobanTx(tx);
+  const assembledTx = rpc.assembleTransaction(tx, rawSim).build();
   assembledTx.sign(keypair);
 
   const { hash } = await submitSorobanTx(assembledTx);

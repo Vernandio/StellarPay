@@ -22,7 +22,18 @@ import { useWallet } from "../../src/hooks/useWallet";
 import { useStellar } from "../../src/hooks/useStellar";
 import { formatAmount } from "../../src/utils/format";
 import { PinVerifySheet, PinVerifySheetRef } from "../../src/components/PinVerifySheet";
-import { payOnChainShare } from "../../src/services/stellar/contracts";
+import { payOnChainShare, claimOnChainFunds, refundOnChainShare } from "../../src/services/stellar/contracts";
+
+const getRequestStatusColor = (status: PaymentRequest["status"]): string => {
+  switch (status) {
+    case "paid": return Colors.teal;
+    case "claimed": return Colors.primary;
+    case "declined": return Colors.danger;
+    case "canceled": return Colors.textMuted;
+    case "refunded": return Colors.textMuted;
+    default: return Colors.amber; // pending
+  }
+};
 
 export default function ActivityScreen() {
   const [activeTab, setActiveTab] = useState<"Transactions" | "Requests">("Transactions");
@@ -247,6 +258,113 @@ export default function ActivityScreen() {
         },
       ]
     );
+  };
+
+  // Keep the sheet in sync with real-time request updates (e.g. a
+  // participant pays while the organizer has the sheet open).
+  const liveRequest = selectedRequest
+    ? requests.find((r) => r.id === selectedRequest.id) || selectedRequest
+    : null;
+
+  // All requests belonging to the same on-chain bill. The organizer is the
+  // sender of every one of them, so their subscription sees the full set.
+  const billRequests = liveRequest?.onChainBillId
+    ? requests.filter((r) => r.onChainBillId === liveRequest.onChainBillId)
+    : [];
+
+  const isOrganizerOfBill = !!liveRequest && liveRequest.senderUid === profile?.uid;
+  const allSharesPaid =
+    billRequests.length > 0 &&
+    billRequests.every((r) => r.status === "paid" || r.status === "claimed");
+
+  const escrowDeadlinePassed = !!liveRequest?.onChainBillId &&
+    Date.now() / 1000 >
+      (liveRequest.escrowDeadline ||
+        (liveRequest.createdAt?.seconds || 0) + 7 * 24 * 60 * 60);
+
+  // Organizer can claim once every participant has paid into the escrow
+  const canClaimFunds =
+    isOrganizerOfBill &&
+    !!liveRequest?.onChainBillId &&
+    allSharesPaid &&
+    billRequests.some((r) => r.status === "paid"); // not yet claimed
+
+  // A participant who already paid can refund after the deadline passes,
+  // as long as the organizer hasn't been able to claim (bill incomplete)
+  const canRefundShare =
+    !isOrganizerOfBill &&
+    !!liveRequest?.onChainBillId &&
+    liveRequest.receiverUid === profile?.uid &&
+    liveRequest.status === "paid" &&
+    escrowDeadlinePassed;
+
+  const handleClaimFunds = async () => {
+    if (!liveRequest?.onChainBillId || !user || !profile?.stellarPublicKey) return;
+    setIsProcessingRequest(true);
+
+    try {
+      const claimTxHash = await claimOnChainFunds(
+        user.uid,
+        profile.stellarPublicKey,
+        liveRequest.onChainBillId
+      );
+
+      // Mark every request in this bill as claimed
+      await Promise.all(
+        billRequests
+          .filter((r) => r.status === "paid")
+          .map((r) => updatePaymentRequest(r.id, { status: "claimed", claimTxHash }))
+      );
+
+      const total = billRequests.reduce((sum, r) => sum + parseFloat(r.amountUSD || "0"), 0);
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Funds Claimed", `$${total.toFixed(2)} USD released from escrow to your wallet.`);
+
+      requestSheetRef.current?.dismiss();
+      refreshBalances();
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Claim Failed", err.message || "Failed to claim escrowed funds.");
+    } finally {
+      setIsProcessingRequest(false);
+      setSelectedRequest(null);
+    }
+  };
+
+  const handleRefundShare = async () => {
+    if (!liveRequest?.onChainBillId || !user || !profile?.stellarPublicKey) return;
+    setIsProcessingRequest(true);
+
+    try {
+      const refundTxHash = await refundOnChainShare(
+        user.uid,
+        profile.stellarPublicKey,
+        liveRequest.onChainBillId
+      );
+
+      await updatePaymentRequest(liveRequest.id, { status: "refunded", refundTxHash });
+
+      await createNotification({
+        uid: liveRequest.senderUid,
+        title: "Escrow Refunded",
+        message: `${profile?.displayName || profile?.username} refunded their $${parseFloat(liveRequest.amountUSD).toFixed(2)} USD share from the expired split bill.`,
+        type: "request_declined",
+        referenceId: liveRequest.id,
+      });
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Refund Complete", `$${parseFloat(liveRequest.amountUSD).toFixed(2)} USD returned to your wallet.`);
+
+      requestSheetRef.current?.dismiss();
+      refreshBalances();
+    } catch (err: any) {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert("Refund Failed", err.message || "Failed to refund your share.");
+    } finally {
+      setIsProcessingRequest(false);
+      setSelectedRequest(null);
+    }
   };
 
   const renderBackdrop = useCallback(
@@ -479,10 +597,7 @@ export default function ActivityScreen() {
                   ? new Date(item.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) 
                   : "Just now";
 
-                let statusColor: string = Colors.amber;
-                if (item.status === "paid") statusColor = Colors.teal;
-                if (item.status === "declined") statusColor = Colors.danger;
-                if (item.status === "canceled") statusColor = Colors.textMuted;
+                const statusColor = getRequestStatusColor(item.status);
 
                 return (
                   <TouchableOpacity
@@ -698,21 +813,21 @@ export default function ActivityScreen() {
               </Text>
 
               {/* Status Badge */}
-              <View style={{ 
-                flexDirection: "row", 
-                alignItems: "center", 
-                backgroundColor: (selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : selectedRequest.status === "canceled" ? Colors.textMuted : Colors.amber) + "20", 
-                paddingHorizontal: 12, 
-                paddingVertical: 6, 
-                borderRadius: 99 
+              <View style={{
+                flexDirection: "row",
+                alignItems: "center",
+                backgroundColor: getRequestStatusColor((liveRequest || selectedRequest).status) + "20",
+                paddingHorizontal: 12,
+                paddingVertical: 6,
+                borderRadius: 99
               }}>
-                <Text style={[Typography.labelSmall, { 
-                  color: selectedRequest.status === "paid" ? Colors.teal : selectedRequest.status === "declined" ? Colors.danger : selectedRequest.status === "canceled" ? Colors.textMuted : Colors.amber, 
-                  fontWeight: "700", 
-                  textTransform: "uppercase", 
-                  fontSize: 11 
+                <Text style={[Typography.labelSmall, {
+                  color: getRequestStatusColor((liveRequest || selectedRequest).status),
+                  fontWeight: "700",
+                  textTransform: "uppercase",
+                  fontSize: 11
                 }]}>
-                  {selectedRequest.status}
+                  {(liveRequest || selectedRequest).status}
                 </Text>
               </View>
             </View>
@@ -732,11 +847,34 @@ export default function ActivityScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
                 <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Requested On</Text>
                 <Text style={[Typography.labelLarge, { color: Colors.textLightPrimary, fontWeight: "600" }]}>
-                  {selectedRequest.createdAt?.seconds 
-                    ? new Date(selectedRequest.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) 
+                  {selectedRequest.createdAt?.seconds
+                    ? new Date(selectedRequest.createdAt.seconds * 1000).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
                     : "Today"}
                 </Text>
               </View>
+
+              {selectedRequest.onChainBillId ? (
+                <>
+                  <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                    <View style={{ flexDirection: "row", alignItems: "center" }}>
+                      <Feather name="shield" size={14} color={Colors.primary} style={{ marginRight: 6 }} />
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Escrow Bill</Text>
+                    </View>
+                    <Text style={[Typography.labelLarge, { color: Colors.primary, fontWeight: "700" }]}>
+                      #{selectedRequest.onChainBillId} on-chain
+                    </Text>
+                  </View>
+
+                  {isOrganizerOfBill && billRequests.length > 0 ? (
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.md }}>
+                      <Text style={[Typography.bodyMedium, { color: Colors.textLightSecondary }]}>Shares Collected</Text>
+                      <Text style={[Typography.labelLarge, { color: allSharesPaid ? Colors.teal : Colors.amber, fontWeight: "700" }]}>
+                        {billRequests.filter((r) => r.status === "paid" || r.status === "claimed").length} of {billRequests.length}
+                      </Text>
+                    </View>
+                  ) : null}
+                </>
+              ) : null}
 
               {selectedRequest.message ? (
                 <View style={{ marginTop: Spacing.xs }}>
@@ -750,8 +888,32 @@ export default function ActivityScreen() {
               ) : null}
             </View>
 
-            {/* Actions for pending request */}
-            {selectedRequest.status === "pending" ? (
+            {/* Actions: claim (organizer, all paid) / refund (participant, expired) / pay / close */}
+            {canClaimFunds ? (
+              <TouchableOpacity
+                onPress={handleClaimFunds}
+                disabled={isProcessingRequest}
+                style={{ height: 52, borderRadius: 26, backgroundColor: Colors.primary, justifyContent: "center", alignItems: "center" }}
+              >
+                {isProcessingRequest ? (
+                  <ActivityIndicator color={Colors.white} />
+                ) : (
+                  <Text style={[Typography.labelLarge, { color: Colors.white, fontWeight: "700" }]}>CLAIM FUNDS FROM ESCROW</Text>
+                )}
+              </TouchableOpacity>
+            ) : canRefundShare ? (
+              <TouchableOpacity
+                onPress={handleRefundShare}
+                disabled={isProcessingRequest}
+                style={{ height: 52, borderRadius: 26, borderWidth: 1, borderColor: Colors.borderLightStrong, justifyContent: "center", alignItems: "center", backgroundColor: Colors.white }}
+              >
+                {isProcessingRequest ? (
+                  <ActivityIndicator color={Colors.danger} />
+                ) : (
+                  <Text style={[Typography.labelLarge, { color: Colors.danger, fontWeight: "700" }]}>REQUEST REFUND</Text>
+                )}
+              </TouchableOpacity>
+            ) : selectedRequest.status === "pending" ? (
               selectedRequest.receiverUid === profile?.uid ? (
                 <View style={{ flexDirection: "row", gap: Spacing.md }}>
                   <TouchableOpacity

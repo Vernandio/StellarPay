@@ -2,13 +2,39 @@
 
 StellarPay is a hybrid Web2.5 digital wallet built on the Stellar blockchain network. It bridges the gap between Web2 convenience (like Cash App or Venmo) and Web3 utility. All blockchain-specific complexities—such as gas fees, trustlines, public keys, secret keys, and base64-encoded XDR transactions—are abstracted away from the end user. The interface is presented entirely in fiat equivalents (USD), while settling transactions fully on-chain in the background.
 
+## Problem Statement
+Traditional Web3 wallets are intimidating for everyday users due to complex onboarding, seed phrases, gas fees, and confusing cryptographic addresses. Meanwhile, Web2 fiat wallets lack transparency, global interoperability, and the decentralized security of blockchain networks. Splitting bills and managing peer-to-peer payments across borders remains fragmented and costly.
+
+## Proposed Solution
+StellarPay delivers a "Web2.5" experience: a familiar, Cash App-like interface that completely abstracts blockchain complexities. It leverages the Stellar network for near-instant, low-cost settlements while using Gemini AI to effortlessly parse and split receipts. Users get the UX of traditional finance with the borderless power of decentralized finance.
+
+## Target Users / Audience
+- **Everyday Consumers:** Friends and groups who frequently split bills (dinners, trips) and want a frictionless P2P payment experience.
+- **Crypto-Curious Individuals:** People interested in digital assets but intimidated by the technical hurdles of traditional Web3 wallets.
+- **Cross-Border Senders:** Users needing fast, low-cost international transfers without dealing with complex crypto exchanges.
+
+## Expected Stellar Integration
+StellarPay relies natively on the Stellar blockchain infrastructure:
+- **Invisible Gas & Trustlines:** Transactions, account funding (Friendbot), and trustline creations are seamlessly handled in the background.
+- **Real-Time Horizon SSE:** Live server-sent events for instant balance updates and transaction feeds.
+- **On-Chain Settlement:** All peer-to-peer transfers and bill splits are settled instantly on-chain using Stellar assets (like USDC) while being presented in familiar fiat equivalents.
+
 ---
 
 ## App Previews & Showcases
 
 Below are placeholder links for showcasing the user interface and interactions. You can drop in your own image assets or screen recordings here:
 
+```text
+┌──────────────────────────────────────────────────────────┐
+│                                                          │
+│                     [APP DEMO GIF]                       │
+│             Location: /assets/demo.gif                   │
+│                                                          │
+└──────────────────────────────────────────────────────────┘
 ```
+
+```text
 ┌──────────────────────────────────────────────────────────┐
 │                                                          │
 │                      [DEMO BANNER]                       │

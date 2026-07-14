@@ -17,7 +17,7 @@ export interface PaymentRequest {
   /** USD amount requested */
   amountUSD: string;
   message: string;
-  status: "pending" | "paid" | "declined" | "canceled";
+  status: "pending" | "paid" | "declined" | "canceled" | "claimed" | "refunded";
   requestedCurrency?: string; // Optional local display currency (e.g. "IDR")
   requestedAmount?: string;   // Optional local display amount (e.g. "90000")
   createdAt: Timestamp;
@@ -30,7 +30,16 @@ export interface PaymentRequest {
   subtotalAmount?: string;
   onChainBillId?: number;     // Link to on-chain Soroban escrow session ID
   contractTxHash?: string;    // Transaction hash of the contract deployment
+  escrowDeadline?: number;    // Unix seconds after which the escrow is refundable
+  claimTxHash?: string;       // Filled when the organizer claims escrowed funds
+  refundTxHash?: string;      // Filled when a participant refunds their share
 }
+
+/** Firestore rejects `undefined` field values — drop them before writing. */
+const stripUndefined = <T extends Record<string, any>>(obj: T): T =>
+  Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
 
 /**
  * Create a new payment request.
@@ -42,7 +51,7 @@ export const createPaymentRequest = async (
   const id = requestRef.id;
 
   await setDoc(requestRef, {
-    ...request,
+    ...stripUndefined(request),
     id,
     status: "pending",
     createdAt: serverTimestamp(),
@@ -56,9 +65,14 @@ export const createPaymentRequest = async (
  */
 export const updatePaymentRequest = async (
   requestId: string,
-  update: { status: "paid" | "declined" | "canceled"; txHash?: string }
+  update: {
+    status: PaymentRequest["status"];
+    txHash?: string;
+    claimTxHash?: string;
+    refundTxHash?: string;
+  }
 ) => {
-  await updateDoc(doc(db, "requests", requestId), update);
+  await updateDoc(doc(db, "requests", requestId), stripUndefined(update));
 };
 
 /**
