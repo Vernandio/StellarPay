@@ -171,4 +171,4 @@ To prevent brute-force attacks on sensitive transaction flows:
 
 - **Vernandio Rivaldo**
 - **Jason**
-- **Natha Buddhi Pratama Chandra**
+- **Natha Buddhi Pratama Chandra**.
