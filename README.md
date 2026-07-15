@@ -1,7 +1,9 @@
 # StellarPay: Invisible Web3 Wallet
 
 > [!IMPORTANT]
-> **📢 Note to Judges:** For the best UI & UX experience, please open and run the **Production Web Application Client** on your **mobile phone's browser** (Safari, Chrome, etc.) as the application interface is custom-tailored for mobile screens.
+> **📢 Note to Judges:** For the best UI & UX experience, please download and install the **Android Application (.APK)** provided below, as the application interface and hardware features (like NFC and Camera) perform best natively.
+> 
+> **Demo Account:** You can log in using the username **johndoe** and PIN **123456**.
 
 ### 🌐 Production Deployments & Links
 - **Production Web Application Client**: [https://stellar-pay-three.vercel.app/](https://stellar-pay-three.vercel.app/)
