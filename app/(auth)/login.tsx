@@ -110,8 +110,7 @@ function PinRow({
 
       <Pressable
         onPress={() => {
-          inputRef.current?.blur();
-          setTimeout(() => inputRef.current?.focus(), 50);
+          inputRef.current?.focus();
         }}
         style={{
           flexDirection: "row",
@@ -171,7 +170,13 @@ function PinRow({
         editable={!isLoading}
         textContentType="oneTimeCode"
         caretHidden
-        style={{ position: "absolute", opacity: 0, width: 1, height: 1 }}
+        style={{
+          position: "absolute",
+          opacity: 0.01,
+          left: -9999,
+          width: 100,
+          height: 50,
+        }}
       />
 
       <TouchableOpacity

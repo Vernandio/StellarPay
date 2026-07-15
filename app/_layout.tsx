@@ -72,7 +72,7 @@ export default function RootLayout() {
     if (!loaded || isLoading) return;
 
     const inAuthGroup = segments[0] === "(auth)";
-    const isIndex = segments.length === 0;
+    const isIndex = (segments.length as number) === 0;
 
     if (!isAuthenticated && !inAuthGroup && !isIndex) {
       router.replace("/(auth)/landing");
