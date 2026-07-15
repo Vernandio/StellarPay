@@ -78,12 +78,18 @@ export default function SecurityScreen() {
       setIsLoading(true);
       setError(null);
       try {
-        const isValid = await verifyPin(pinStr);
-        if (isValid) {
+        const result = await verifyPin(pinStr);
+        if (result.ok) {
           setStage("new");
           setTimeout(() => newRefs[0].current?.focus(), 300);
         } else {
-          setError("Incorrect current PIN");
+          setError(
+            result.reason === "locked"
+              ? result.error
+              : result.reason === "incorrect"
+              ? "Incorrect current PIN"
+              : result.error
+          );
           setCurrentPin(emptyPin());
           currentRefs[0].current?.focus();
         }

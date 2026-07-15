@@ -26,14 +26,21 @@ import { Spacing } from "../../src/constants/spacing";
 import { webFormColumn } from "../../src/constants/layout";
 import { verifyPin } from "../../src/services/api/pin";
 import { signOut } from "../../src/services/firebase/auth";
-import { auth, db } from "../../src/services/firebase/config";
+import { auth } from "../../src/services/firebase/config";
 import { getUserProfile, UserProfile } from "../../src/services/firebase/firestore";
-import { doc, updateDoc, deleteDoc } from "@firebase/firestore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SecureStore from 'expo-secure-store';
 import * as LocalAuthentication from 'expo-local-authentication';
 
 const { width } = Dimensions.get("window");
+
+// Formats a remaining-seconds count as "m:ss" (or "Ns" under a minute).
+function formatCountdown(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 function PinRow({
   value,
@@ -186,6 +193,9 @@ export default function PinEntryScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [biometricsEnabled, setBiometricsEnabled] = useState(false);
+  // Server-driven lockout: when set, PIN entry is disabled until this time.
+  const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+  const [lockRemaining, setLockRemaining] = useState(0);
 
   useEffect(() => {
     (async () => {
@@ -243,55 +253,63 @@ export default function PinEntryScreen() {
     });
   }, []);
 
+  // Tick the lockout countdown once per second; clear the lock when it expires.
+  useEffect(() => {
+    if (lockedUntil === null) {
+      setLockRemaining(0);
+      return;
+    }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000));
+      setLockRemaining(remaining);
+      if (remaining === 0) {
+        setLockedUntil(null);
+        setError(null);
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [lockedUntil]);
+
   const verifyCode = async (enteredPin: string) => {
+    // Locked out — don't even attempt (also blocks a queued biometric/onComplete).
+    if (lockedUntil !== null && lockedUntil > Date.now()) return;
     setIsLoading(true);
     setError(null);
     try {
-      const isValid = await verifyPin(enteredPin);
-      if (isValid) {
-        await AsyncStorage.removeItem("failed_pin_attempts");
-        await Haptics.notificationAsync(
-          Haptics.NotificationFeedbackType.Success
-        );
+      // Attempt-counting and lockout are enforced server-side; the client just
+      // reflects the verdict. See verifyPin in src/services/api/pin.ts.
+      const result = await verifyPin(enteredPin);
+
+      if (result.ok) {
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         router.replace("/(tabs)");
+        return;
+      }
+
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setPin("");
+
+      if (result.reason === "locked") {
+        setLockedUntil(new Date(result.lockedUntil).getTime());
+        setError(result.error);
+      } else if (result.reason === "incorrect") {
+        setError(
+          result.remaining > 0
+            ? `Incorrect PIN code. ${result.remaining} attempt${
+                result.remaining === 1 ? "" : "s"
+              } remaining.`
+            : result.error
+        );
       } else {
-        throw new Error("Invalid PIN code");
+        setError(result.error);
       }
     } catch (err: any) {
+      // Only genuine transport/unexpected failures reach here.
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      
-      // Handle failed attempts limit (3 strikes)
-      try {
-        const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
-        const count = attemptsStr ? parseInt(attemptsStr) : 0;
-        const newCount = count + 1;
-        if (newCount >= 5) {
-          await AsyncStorage.removeItem("failed_pin_attempts");
-          setError("Incorrect PIN. Account locked.");
-          
-          if (auth.currentUser?.uid) {
-            const uid = auth.currentUser.uid;
-            // Reset PIN on backend/firestore
-            await Promise.all([
-              updateDoc(doc(db, "users", uid), { hasPin: false }),
-              deleteDoc(doc(db, "users", uid, "security", "pin"))
-            ]);
-          }
-          
-          Alert.alert(
-            "Account Locked & Logged Out",
-            "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
-            [{ text: "OK", onPress: () => handleLogout() }]
-          );
-        } else {
-          await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
-          setError(`Incorrect PIN code. ${5 - newCount} attempts remaining.`);
-        }
-      } catch (innerErr) {
-        setError(err.message || "Incorrect PIN code. Please try again.");
-      }
-      
       setPin("");
+      setError(err.message || "Incorrect PIN code. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -308,6 +326,7 @@ export default function PinEntryScreen() {
   };
 
   const accountLabel = profile?.email || profile?.username || auth.currentUser?.email || null;
+  const locked = lockedUntil !== null && lockRemaining > 0;
 
   return (
     <Pressable onPress={() => Keyboard.dismiss()} style={{ flex: 1, backgroundColor: Colors.base }}>
@@ -366,7 +385,7 @@ export default function PinEntryScreen() {
               flex: 1,
             }}
           >
-            {error && (
+            {(error || locked) && (
               <Animated.View entering={FadeInDown.duration(200)}>
                 <Text
                   style={[
@@ -378,7 +397,11 @@ export default function PinEntryScreen() {
                     },
                   ]}
                 >
-                  {error}
+                  {locked
+                    ? `Too many incorrect attempts. Try again in ${formatCountdown(
+                        lockRemaining
+                      )}.`
+                    : error}
                 </Text>
               </Animated.View>
             )}
@@ -392,7 +415,7 @@ export default function PinEntryScreen() {
                 sublabel={accountLabel ? `Signing in as ${accountLabel}` : "Confirm your identity"}
                 onSubmit={() => verifyCode(pin)}
                 submitLabel="Unlock"
-                isLoading={isLoading}
+                isLoading={isLoading || locked}
                 autoFocus
               />
 

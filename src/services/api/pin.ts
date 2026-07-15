@@ -12,13 +12,53 @@ export const setupPin = async (pin: string): Promise<void> => {
   await apiClient.post("/api/pin/setup", { pin });
 };
 
+export type PinVerifyResult =
+  | { ok: true }
+  | { ok: false; reason: "incorrect"; remaining: number; error: string }
+  | { ok: false; reason: "locked"; lockedUntil: string; error: string }
+  | { ok: false; reason: "error"; error: string };
+
 /**
  * Verifies the user's PIN.
- * Returns true if the PIN is correct, throws on failure.
+ *
+ * Attempt-counting and lockout are enforced server-side (see the backend
+ * pinController). This returns the server's structured verdict rather than a
+ * bare boolean so the UI can show remaining attempts / lock countdown without
+ * keeping its own (bypassable) counter. It does not throw on a wrong PIN or a
+ * lockout — only on an unexpected transport/server failure.
  */
-export const verifyPin = async (pin: string): Promise<boolean> => {
-  const result = await apiClient.post<{ valid: boolean }>("/api/pin/verify", { pin });
-  return result.valid;
+export const verifyPin = async (pin: string): Promise<PinVerifyResult> => {
+  const res = await apiClient.postRaw("/api/pin/verify", { pin });
+  const data = (res.data ?? {}) as {
+    valid?: boolean;
+    remaining?: number;
+    locked?: boolean;
+    lockedUntil?: string;
+    error?: string;
+  };
+
+  if (res.ok && data.valid) return { ok: true };
+
+  if (res.status === 429 || data.locked) {
+    return {
+      ok: false,
+      reason: "locked",
+      lockedUntil: data.lockedUntil ?? new Date().toISOString(),
+      error: data.error ?? "Too many incorrect attempts. Please try again later.",
+    };
+  }
+
+  if (res.status === 401) {
+    return {
+      ok: false,
+      reason: "incorrect",
+      remaining: typeof data.remaining === "number" ? data.remaining : 0,
+      error: data.error ?? "Incorrect PIN",
+    };
+  }
+
+  // 404 (no PIN set), 400 (bad request), 5xx, etc.
+  return { ok: false, reason: "error", error: data.error ?? `Verification failed (${res.status})` };
 };
 
 /**

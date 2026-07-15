@@ -314,12 +314,20 @@ export default function LoginScreen() {
         await signInWithCustomToken(auth, customToken);
       }
 
-      const valid = await verifyPin(code);
-      if (!valid) throw new Error("Incorrect PIN. Please try again.");
-      
-      // Clear failed PIN attempts on successful login
-      await AsyncStorage.removeItem("failed_pin_attempts");
-      
+      // Attempt-counting and lockout are enforced server-side; surface the
+      // server's verdict rather than treating the result as a bare boolean.
+      const result = await verifyPin(code);
+      if (!result.ok) {
+        if (result.reason === "incorrect" && result.remaining > 0) {
+          throw new Error(
+            `Incorrect PIN. ${result.remaining} attempt${
+              result.remaining === 1 ? "" : "s"
+            } remaining.`
+          );
+        }
+        throw new Error(result.error);
+      }
+
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (err: any) {

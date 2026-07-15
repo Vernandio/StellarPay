@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useImperativeHandle, forwardRef, useRef } from "react";
+import React, { useState, useEffect, useCallback, useImperativeHandle, forwardRef, useRef } from "react";
 import { View, Text, Pressable, ActivityIndicator, Alert } from "react-native";
 import { BottomSheetModal, BottomSheetBackdrop, BottomSheetView } from "@gorhom/bottom-sheet";
 import { router } from "expo-router";
@@ -10,11 +10,15 @@ import * as Haptics from "expo-haptics";
 import { Colors } from "../constants/colors";
 import { Spacing } from "../constants/spacing";
 import { Typography } from "../constants/typography";
-import { useAuthStore } from "../store/authStore";
-import { auth, db } from "../services/firebase/config";
-import { doc, updateDoc, deleteDoc } from "@firebase/firestore";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { API_BASE } from "../services/api/client";
+import { verifyPin as verifyPinApi } from "../services/api/pin";
+
+// Formats a remaining-seconds count as "m:ss" (or "Ns" under a minute).
+function formatCountdown(totalSeconds: number): string {
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 interface PinVerifySheetProps {
   onSuccess: (verifiedPin: string) => void;
@@ -33,6 +37,9 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
     const [isVerifying, setIsVerifying] = useState(false);
     const [error, setError] = useState("");
     const [verified, setVerified] = useState(false);
+    // Server-driven lockout countdown (ms epoch), null when not locked.
+    const [lockedUntil, setLockedUntil] = useState<number | null>(null);
+    const [lockRemaining, setLockRemaining] = useState(0);
 
     const shakeX = useSharedValue(0);
 
@@ -50,115 +57,79 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
       transform: [{ translateX: shakeX.value }],
     }));
 
+    // Tick the lockout countdown; clear the lock when it expires.
+    useEffect(() => {
+      if (lockedUntil === null) {
+        setLockRemaining(0);
+        return;
+      }
+      const tick = () => {
+        const remaining = Math.max(0, Math.ceil((lockedUntil - Date.now()) / 1000));
+        setLockRemaining(remaining);
+        if (remaining === 0) {
+          setLockedUntil(null);
+          setError("");
+        }
+      };
+      tick();
+      const id = setInterval(tick, 1000);
+      return () => clearInterval(id);
+    }, [lockedUntil]);
+
+    const locked = lockedUntil !== null && lockRemaining > 0;
+
+    const shake = () => {
+      shakeX.value = withSequence(
+        withTiming(-12, { duration: 50 }),
+        withTiming(12, { duration: 50 }),
+        withTiming(-12, { duration: 50 }),
+        withTiming(12, { duration: 50 }),
+        withTiming(0, { duration: 50 })
+      );
+    };
+
     const verifyPin = async (fullPin: string) => {
+      // Blocked by an active lockout — ignore submissions until it expires.
+      if (lockedUntil !== null && lockedUntil > Date.now()) return;
       setIsVerifying(true);
       setError("");
       try {
-        const token = await auth.currentUser?.getIdToken();
-        let res;
-        try {
-          res = await fetch(`${API_BASE}/api/pin/verify`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({ pin: fullPin }),
-          });
-        } catch (netErr) {
-          // Network / Connection Error (e.g. Server down, offline)
-          setPin("");
-          setError("Network Error. Please try again later.");
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          return;
-        }
+        // Attempt-counting and lockout are enforced server-side; we just render
+        // the verdict. See verifyPin in src/services/api/pin.ts.
+        const result = await verifyPinApi(fullPin);
 
-        // Handle non-OK status codes
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          
-          // Only count client validation/authentication failures as incorrect PIN attempts
-          if (res.status === 401 || res.status === 400 || res.status === 404) {
-            setPin("");
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-            shakeX.value = withSequence(
-              withTiming(-12, { duration: 50 }),
-              withTiming(12, { duration: 50 }),
-              withTiming(-12, { duration: 50 }),
-              withTiming(12, { duration: 50 }),
-              withTiming(0, { duration: 50 })
-            );
-
-            // Handle 5 failed attempts
-            try {
-              const attemptsStr = await AsyncStorage.getItem("failed_pin_attempts");
-              const count = attemptsStr ? parseInt(attemptsStr) : 0;
-              const newCount = count + 1;
-              
-              if (newCount >= 5) {
-                await AsyncStorage.removeItem("failed_pin_attempts");
-                setError("Incorrect PIN. Account locked.");
-                
-                sheetRef.current?.dismiss();
-                
-                if (auth.currentUser?.uid) {
-                  const uid = auth.currentUser.uid;
-                  // Reset PIN on backend/firestore
-                  await Promise.all([
-                    updateDoc(doc(db, "users", uid), { hasPin: false }),
-                    deleteDoc(doc(db, "users", uid, "security", "pin"))
-                  ]);
-                }
-                
-                Alert.alert(
-                  "Account Locked & Logged Out",
-                  "You have entered an incorrect PIN 5 times. Your PIN has been reset and your account has been locked. Please log in again and set up a new PIN.",
-                  [{ 
-                    text: "OK", 
-                    onPress: async () => {
-                      try {
-                        await auth.signOut();
-                        router.replace("/(auth)/login");
-                      } catch (sErr) {
-                        console.error("Sign out failed from sheet:", sErr);
-                      }
-                    } 
-                  }]
-                );
-              } else {
-                await AsyncStorage.setItem("failed_pin_attempts", String(newCount));
-                setError(`${data.error || "Incorrect PIN"}. ${5 - newCount} attempts remaining.`);
-              }
-            } catch (innerErr) {
-              setError(data.error || "Incorrect PIN");
-            }
-          } else {
-            // Internal Server / Gateway Errors (500, 502, 503)
-            setPin("");
-            setError("Server Error. Please try again later.");
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-          }
-          return;
-        }
-
-        const data = await res.json();
-
-        if (data.valid) {
-          await AsyncStorage.removeItem("failed_pin_attempts");
+        if (result.ok) {
           setVerified(true);
           await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setTimeout(() => {
             sheetRef.current?.dismiss();
             onSuccess(fullPin);
           }, 600);
+          return;
+        }
+
+        setPin("");
+        await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+
+        if (result.reason === "locked") {
+          setLockedUntil(new Date(result.lockedUntil).getTime());
+          setError(result.error);
+        } else if (result.reason === "incorrect") {
+          shake();
+          setError(
+            result.remaining > 0
+              ? `Incorrect PIN. ${result.remaining} attempt${
+                  result.remaining === 1 ? "" : "s"
+                } remaining.`
+              : result.error
+          );
         } else {
-          setPin("");
-          setError("Incorrect PIN");
-          await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          setError(result.error);
         }
       } catch (err: any) {
+        // Genuine network/transport failure.
         setPin("");
-        setError("An unexpected error occurred.");
+        setError(err.message || "An unexpected error occurred.");
         await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       } finally {
         setIsVerifying(false);
@@ -166,7 +137,7 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
     };
 
     const handleKeyPress = (key: string) => {
-      if (isVerifying || verified) return;
+      if (isVerifying || verified || locked) return;
 
       if (key === "delete") {
         setPin((p) => p.slice(0, -1));
@@ -258,10 +229,12 @@ export const PinVerifySheet = forwardRef<PinVerifySheetRef, PinVerifySheetProps>
             ))}
           </Animated.View>
 
-          {/* Error */}
-          {error ? (
+          {/* Error / lockout countdown */}
+          {error || locked ? (
             <Text style={[Typography.bodySmall, { color: Colors.danger, textAlign: "center", marginBottom: Spacing.md }]}>
-              {error}
+              {locked
+                ? `Too many attempts. Try again in ${formatCountdown(lockRemaining)}.`
+                : error}
             </Text>
           ) : null}
 

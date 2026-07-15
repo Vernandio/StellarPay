@@ -53,6 +53,32 @@ export const apiClient = {
     }
   },
 
+  // Like `post`, but does not throw on non-2xx — returns the status and parsed
+  // body so the caller can branch on structured error responses (e.g. the PIN
+  // lockout flow). Still throws on genuine network failure.
+  postRaw: async (
+    path: string,
+    body: object = {}
+  ): Promise<{ ok: boolean; status: number; data: any }> => {
+    try {
+      const headers = await getAuthHeaders();
+      const res = await fetch(`${API_BASE}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+      const data = await res.json().catch(() => ({}));
+      return { ok: res.ok, status: res.status, data };
+    } catch (err: any) {
+      if (err.message === "Network request failed") {
+        throw new Error(
+          `Unable to connect to the backend server. Please verify that the Express backend is running on: ${API_BASE}`
+        );
+      }
+      throw err;
+    }
+  },
+
   get: async <T = any>(path: string): Promise<T> => {
     try {
       const headers = await getAuthHeaders();
