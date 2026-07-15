@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { Platform } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
@@ -14,6 +14,7 @@ import { useNotificationListener } from "../src/hooks/useNotificationListener";
 import { WebContainer } from "../src/components/WebContainer";
 import { Colors } from "../src/constants/colors";
 import { Toast } from "../src/components/Toast";
+import { useAuth } from "../src/hooks/useAuth";
 import "../global.css";
 
 const isWeb = Platform.OS === "web";
@@ -60,8 +61,23 @@ export default function RootLayout() {
     ...AntDesign.font,
   });
 
+  const { isAuthenticated, isLoading } = useAuth();
+  const segments = useSegments();
+  const router = useRouter();
+
   // Listen to Firestore notifications and display local OS alerts
   useNotificationListener();
+
+  useEffect(() => {
+    if (!loaded || isLoading) return;
+
+    const inAuthGroup = segments[0] === "(auth)";
+    const isIndex = segments.length === 0;
+
+    if (!isAuthenticated && !inAuthGroup && !isIndex) {
+      router.replace("/(auth)/landing");
+    }
+  }, [isAuthenticated, isLoading, segments, loaded]);
 
   useEffect(() => {
     if (error) {
