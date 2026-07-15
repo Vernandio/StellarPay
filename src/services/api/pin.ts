@@ -28,3 +28,12 @@ export const verifyPin = async (pin: string): Promise<boolean> => {
 export const changePin = async (oldPin: string, newPin: string): Promise<void> => {
   await apiClient.post("/api/pin/change", { oldPin, newPin });
 };
+
+/**
+ * Resets the user's PIN without the old PIN.
+ * Only works while signed in with a forgot-PIN reset token (carries the
+ * `pinReset` claim). Used by the forgot-PIN flow after OTP verification.
+ */
+export const resetPin = async (pin: string): Promise<void> => {
+  await apiClient.post("/api/pin/reset", { pin });
+};

@@ -30,7 +30,7 @@ import {
   sendForgotPinOtp,
   verifyForgotPinOtp,
 } from "../../src/services/api/auth";
-import { verifyPin, setupPin } from "../../src/services/api/pin";
+import { verifyPin, resetPin } from "../../src/services/api/pin";
 import { getUserProfile } from "../../src/services/firebase/firestore";
 import { apiClient } from "../../src/services/api/client";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -384,7 +384,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     setError(null);
     try {
-      await setupPin(code);
+      await resetPin(code);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
     } catch (err: any) {

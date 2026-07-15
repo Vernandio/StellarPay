@@ -43,6 +43,44 @@ export const setupPin = async (req: Request, res: Response) => {
   }
 };
 
+/**
+ * Resets the PIN without the old PIN.
+ * Only usable with a token minted by the forgot-PIN OTP flow, which carries
+ * the `pinReset: true` custom claim (see verifyForgotPinOtp). This lets a user
+ * who genuinely forgot their PIN set a new one, while still preventing a normal
+ * session token from overwriting a PIN without knowing the current one.
+ */
+export const resetPin = async (req: Request, res: Response) => {
+  try {
+    const uid = req.user?.uid;
+    if (!uid) return res.status(401).json({ error: "Unauthorized" });
+
+    if (req.user?.pinReset !== true) {
+      return res.status(403).json({ error: "This action requires a PIN reset code." });
+    }
+
+    const { pin } = req.body;
+    if (!pin || pin.length !== 6 || !/^\d{6}$/.test(pin)) {
+      return res.status(400).json({ error: "PIN must be exactly 6 digits" });
+    }
+
+    const pinHash = await bcrypt.hash(pin, SALT_ROUNDS);
+    const securityRef = adminFirestore.collection("users").doc(uid).collection("security").doc("pin");
+    await securityRef.set({
+      pinHash,
+      pinSetAt: new Date(),
+      pinChangedAt: new Date(),
+    });
+
+    await adminFirestore.collection("users").doc(uid).update({ hasPin: true });
+
+    return res.status(200).json({ message: "PIN reset successfully" });
+  } catch (error) {
+    console.error("PIN reset error:", error);
+    return res.status(500).json({ error: "Failed to reset PIN" });
+  }
+};
+
 export const verifyPin = async (req: Request, res: Response) => {
   try {
     const uid = req.user?.uid;
